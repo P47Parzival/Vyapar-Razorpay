@@ -1,0 +1,16 @@
+{
+  "name": "vyapar",
+  "private": true,
+  "workspaces": [
+    "packages/server",
+    "packages/dashboard"
+  ],
+  "scripts": {
+    "dev:server": "npm run dev --workspace=packages/server",
+    "dev:dashboard": "npm run dev --workspace=packages/dashboard",
+    "dev": "concurrently \"npm run dev:server\" \"npm run dev:dashboard\""
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
