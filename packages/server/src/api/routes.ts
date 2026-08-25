@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { getPolicyConfig, updatePolicyConfig } from '../gateway/policy-config.js';
 import { getLedgerEntries, getLedgerEntry, getLedgerEntriesSince } from '../ledger/ledger.js';
 import { runGrowthAgent, type GrowthAgentScenario } from '../agents/growth-agent.js';
+import { runBuyerAgent } from '../agents/buyer-agent.js';
 
 const router = Router();
 
@@ -130,6 +131,22 @@ router.post('/agents/growth/upsell', async (req, res) => {
     };
 
     const result = await runGrowthAgent(scenario);
+    res.json({ success: true, ...result });
+  } catch (err) {
+    const error = err as Error;
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.post('/agents/buyer/shop', async (req, res) => {
+  try {
+    const { request } = req.body;
+    if (!request || typeof request !== 'string') {
+      res.status(400).json({ success: false, error: 'Missing "request" field (shopping request text)' });
+      return;
+    }
+
+    const result = await runBuyerAgent(request);
     res.json({ success: true, ...result });
   } catch (err) {
     const error = err as Error;

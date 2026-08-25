@@ -1,6 +1,7 @@
 import LedgerFeed from './components/LedgerFeed';
 import AgentTriggers from './components/AgentTriggers';
 import RevenueCounter from './components/RevenueCounter';
+import PolicyPanel from './components/PolicyPanel';
 
 function App() {
   return (
@@ -24,7 +25,8 @@ function App() {
           <div className="lg:col-span-2">
             <LedgerFeed />
           </div>
-          <div>
+          <div className="space-y-4">
+            <PolicyPanel />
             <AgentTriggers />
           </div>
         </div>
