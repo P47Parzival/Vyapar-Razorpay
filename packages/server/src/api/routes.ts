@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { getPolicyConfig, updatePolicyConfig } from '../gateway/policy-config.js';
 import { getLedgerEntries, getLedgerEntry, getLedgerEntriesSince } from '../ledger/ledger.js';
+import { runGrowthAgent, type GrowthAgentScenario } from '../agents/growth-agent.js';
 
 const router = Router();
 
@@ -81,6 +82,59 @@ router.get('/ledger/:id', (req, res) => {
     razorpay_call: entry.razorpay_call_json ? JSON.parse(entry.razorpay_call_json) : null,
     razorpay_response: entry.razorpay_response_json ? JSON.parse(entry.razorpay_response_json) : null,
   });
+});
+
+// --- Agent trigger endpoints ---
+
+router.post('/agents/growth/cart-recovery', async (req, res) => {
+  try {
+    const scenario: GrowthAgentScenario = {
+      type: 'cart_recovery',
+      context: req.body.context || {
+        customer_id: 'cust_demo_001',
+        customer_name: 'Priya Sharma',
+        abandoned_items: [
+          { id: 'item_003', name: 'Vitamin C Serum', price_paise: 89000, category: 'skincare' },
+          { id: 'item_004', name: 'Hydrating Toner', price_paise: 55000, category: 'skincare' },
+        ],
+        cart_total_paise: 144000,
+        abandoned_at: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+        reason: 'Payment failed — card declined',
+      },
+    };
+
+    const result = await runGrowthAgent(scenario);
+    res.json({ success: true, ...result });
+  } catch (err) {
+    const error = err as Error;
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.post('/agents/growth/upsell', async (req, res) => {
+  try {
+    const scenario: GrowthAgentScenario = {
+      type: 'upsell',
+      context: req.body.context || {
+        customer_id: 'cust_demo_002',
+        customer_name: 'Rahul Verma',
+        completed_order: {
+          order_id: 'order_demo_001',
+          items: [
+            { id: 'item_001', name: 'Gentle Face Wash', price_paise: 45000, category: 'skincare' },
+          ],
+          total_paise: 45000,
+          completed_at: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
+        },
+      },
+    };
+
+    const result = await runGrowthAgent(scenario);
+    res.json({ success: true, ...result });
+  } catch (err) {
+    const error = err as Error;
+    res.status(500).json({ success: false, error: error.message });
+  }
 });
 
 export default router;

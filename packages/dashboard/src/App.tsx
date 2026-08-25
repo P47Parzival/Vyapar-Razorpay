@@ -1,4 +1,6 @@
 import LedgerFeed from './components/LedgerFeed';
+import AgentTriggers from './components/AgentTriggers';
+import RevenueCounter from './components/RevenueCounter';
 
 function App() {
   return (
@@ -15,8 +17,17 @@ function App() {
         </p>
       </header>
 
-      <main className="grid grid-cols-1 gap-6">
-        <LedgerFeed />
+      <main className="space-y-6">
+        <RevenueCounter />
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2">
+            <LedgerFeed />
+          </div>
+          <div>
+            <AgentTriggers />
+          </div>
+        </div>
       </main>
     </div>
   );

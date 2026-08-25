@@ -65,13 +65,13 @@ export function seedDatabase() {
     console.log('[Seed] Inserted default policy config');
   }
 
-  // Create a default mandate for both agents
+  // Ensure valid mandates exist for both agents (refresh if expired)
+  const now = new Date().toISOString();
+  const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(); // 24 hours
+
   const existingMandates = db.prepare('SELECT COUNT(*) as count FROM mandates').get() as { count: number };
 
   if (existingMandates.count === 0) {
-    const now = new Date().toISOString();
-    const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString(); // 1 hour from now
-
     db.prepare(
       'INSERT INTO mandates (id, agent_id, principal, granted_at, expires_at, revoked) VALUES (?, ?, ?, ?, ?, ?)'
     ).run('mandate_growth_001', 'growth', 'merchant_default', now, expiresAt, 0);
@@ -81,5 +81,9 @@ export function seedDatabase() {
     ).run('mandate_buyer_001', 'buyer', 'merchant_default', now, expiresAt, 0);
 
     console.log('[Seed] Inserted default mandates for both agents');
+  } else {
+    // Refresh mandates to ensure they're not expired
+    db.prepare('UPDATE mandates SET granted_at = ?, expires_at = ?, revoked = 0').run(now, expiresAt);
+    console.log('[Seed] Refreshed mandates (valid for 24h)');
   }
 }
