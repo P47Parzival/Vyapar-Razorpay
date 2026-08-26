@@ -2,6 +2,8 @@ import LedgerFeed from './components/LedgerFeed';
 import AgentTriggers from './components/AgentTriggers';
 import RevenueCounter from './components/RevenueCounter';
 import PolicyPanel from './components/PolicyPanel';
+import AgentAccessPanel from './components/AgentAccessPanel';
+import MandatePanel from './components/MandatePanel';
 
 function App() {
   return (
@@ -26,6 +28,8 @@ function App() {
             <LedgerFeed />
           </div>
           <div className="space-y-4">
+            <MandatePanel />
+            <AgentAccessPanel />
             <PolicyPanel />
             <AgentTriggers />
           </div>

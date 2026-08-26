@@ -8,6 +8,10 @@ interface MandateRow {
   granted_at: string;
   expires_at: string;
   revoked: number;
+  scope_max_amount_paise: number;
+  scope_category_json: string;
+  issued_by: string;
+  consent_method: string;
 }
 
 export function checkMandate(proposal: Proposal): PolicyCheckResult {
@@ -27,9 +31,28 @@ export function checkMandate(proposal: Proposal): PolicyCheckResult {
     };
   }
 
+  // Scope check: amount
+  if (proposal.amount_paise > mandate.scope_max_amount_paise) {
+    return {
+      check_name: 'mandate',
+      passed: false,
+      detail: `Mandate ${mandate.id} scope exceeded: ₹${(proposal.amount_paise / 100).toFixed(0)} > max ₹${(mandate.scope_max_amount_paise / 100).toFixed(0)}`,
+    };
+  }
+
+  // Scope check: category
+  const allowedCategories: string[] = JSON.parse(mandate.scope_category_json);
+  if (allowedCategories.length > 0 && !allowedCategories.includes(proposal.category)) {
+    return {
+      check_name: 'mandate',
+      passed: false,
+      detail: `Mandate ${mandate.id} scope exceeded: category "${proposal.category}" not in mandate scope [${allowedCategories.join(', ')}]`,
+    };
+  }
+
   return {
     check_name: 'mandate',
     passed: true,
-    detail: `Active mandate ${mandate.id} valid until ${mandate.expires_at}`,
+    detail: `Active mandate ${mandate.id} (scope: ₹${(mandate.scope_max_amount_paise / 100).toFixed(0)}, [${allowedCategories.join(',')}]) valid until ${mandate.expires_at}`,
   };
 }

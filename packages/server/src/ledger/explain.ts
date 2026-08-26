@@ -8,6 +8,7 @@ export function generateExplanation(proposal: Proposal, decision: Decision): str
     const failedCheck = decision.checks.find(c => !c.passed);
     const reasonMap: Record<string, string> = {
       MANDATE_EXPIRED: `Denied: no valid mandate for ${agent}.`,
+      MANDATE_SCOPE_EXCEEDED: `Denied: ${amount} ${proposal.category} proposal exceeds mandate scope for ${agent}.`,
       PER_TRANSACTION_CAP_EXCEEDED: `Denied: proposed ${amount} exceeds per-transaction cap for ${agent}.`,
       VELOCITY_CAP_EXCEEDED: `Denied: daily spending/transaction limit would be breached by this ${amount} proposal.`,
       CATEGORY_NOT_ALLOWED: `Denied: category "${proposal.category}" is not in the merchant's allowed categories for ${agent}.`,

@@ -25,6 +25,13 @@ const REASON_CODES: Record<string, string> = {
   idempotency: 'DUPLICATE_DETECTED',
 };
 
+function getReasonCode(check: PolicyCheckResult): string {
+  if (check.check_name === 'mandate' && check.detail.includes('scope exceeded')) {
+    return 'MANDATE_SCOPE_EXCEEDED';
+  }
+  return REASON_CODES[check.check_name] || 'POLICY_CHECK_FAILED';
+}
+
 export async function processProposal(proposal: Proposal): Promise<GatewayResult> {
   const policy = getPolicyConfig(proposal.merchant_id);
   const checks: PolicyCheckResult[] = [];
@@ -57,7 +64,7 @@ export async function processProposal(proposal: Proposal): Promise<GatewayResult
     const decision: Decision = {
       proposal_id: proposal.proposal_id,
       verdict: 'denied',
-      reason_code: REASON_CODES[failedCheck.check_name] || 'POLICY_CHECK_FAILED',
+      reason_code: getReasonCode(failedCheck),
       reason_text: failedCheck.detail,
       checks,
       checked_at: now,

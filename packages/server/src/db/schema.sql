@@ -27,7 +27,11 @@ CREATE TABLE IF NOT EXISTS mandates (
   principal TEXT NOT NULL,
   granted_at TEXT NOT NULL DEFAULT (datetime('now')),
   expires_at TEXT NOT NULL,
-  revoked INTEGER NOT NULL DEFAULT 0
+  revoked INTEGER NOT NULL DEFAULT 0,
+  scope_max_amount_paise INTEGER NOT NULL DEFAULT 300000,
+  scope_category_json TEXT NOT NULL DEFAULT '["skincare","haircare","bodycare","wellness","accessories"]',
+  issued_by TEXT NOT NULL DEFAULT 'system',
+  consent_method TEXT NOT NULL DEFAULT 'auto_seed'
 );
 
 CREATE TABLE IF NOT EXISTS ledger (

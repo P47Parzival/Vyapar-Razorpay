@@ -65,25 +65,36 @@ export function seedDatabase() {
     console.log('[Seed] Inserted default policy config');
   }
 
-  // Ensure valid mandates exist for both agents (refresh if expired)
+  // Dev convenience: seed one mandate per agent so the app works out of the box.
+  // In the intended flow, mandates are issued explicitly via the dashboard.
   const now = new Date().toISOString();
-  const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(); // 24 hours
+  const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
 
   const existingMandates = db.prepare('SELECT COUNT(*) as count FROM mandates').get() as { count: number };
 
   if (existingMandates.count === 0) {
     db.prepare(
-      'INSERT INTO mandates (id, agent_id, principal, granted_at, expires_at, revoked) VALUES (?, ?, ?, ?, ?, ?)'
-    ).run('mandate_growth_001', 'growth', 'merchant_default', now, expiresAt, 0);
+      `INSERT INTO mandates (id, agent_id, principal, granted_at, expires_at, revoked, scope_max_amount_paise, scope_category_json, issued_by, consent_method)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run('mandate_growth_001', 'growth', 'merchant_default', now, expiresAt, 0,
+      300000, '["skincare","haircare","bodycare","wellness","accessories"]', 'system', 'dev_seed');
 
     db.prepare(
-      'INSERT INTO mandates (id, agent_id, principal, granted_at, expires_at, revoked) VALUES (?, ?, ?, ?, ?, ?)'
-    ).run('mandate_buyer_001', 'buyer', 'merchant_default', now, expiresAt, 0);
+      `INSERT INTO mandates (id, agent_id, principal, granted_at, expires_at, revoked, scope_max_amount_paise, scope_category_json, issued_by, consent_method)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run('mandate_buyer_001', 'buyer', 'merchant_default', now, expiresAt, 0,
+      300000, '["skincare","haircare","bodycare","wellness","accessories"]', 'system', 'dev_seed');
 
-    console.log('[Seed] Inserted default mandates for both agents');
+    console.log('[Seed] Inserted default mandates (dev convenience, scope: ₹3000 all categories)');
   } else {
-    // Refresh mandates to ensure they're not expired
-    db.prepare('UPDATE mandates SET granted_at = ?, expires_at = ?, revoked = 0').run(now, expiresAt);
-    console.log('[Seed] Refreshed mandates (valid for 24h)');
+    // Check if any active mandates exist — if all are expired/revoked, warn but don't auto-refresh
+    const active = db.prepare(
+      "SELECT COUNT(*) as count FROM mandates WHERE revoked = 0 AND expires_at > ?"
+    ).get(now) as { count: number };
+    if (active.count === 0) {
+      console.log('[Seed] WARNING: No active mandates. Issue one via the dashboard before running agents.');
+    } else {
+      console.log(`[Seed] ${active.count} active mandate(s) found.`);
+    }
   }
 }

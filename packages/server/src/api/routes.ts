@@ -1,4 +1,6 @@
 import { Router, Request, Response } from 'express';
+import { randomUUID } from 'node:crypto';
+import db from '../db/client.js';
 import { getPolicyConfig, updatePolicyConfig } from '../gateway/policy-config.js';
 import { getLedgerEntries, getLedgerEntry, getLedgerEntriesSince } from '../ledger/ledger.js';
 import { runGrowthAgent, type GrowthAgentScenario } from '../agents/growth-agent.js';
@@ -17,6 +19,88 @@ router.patch('/policy', (req, res) => {
   const updates = req.body;
   const updated = updatePolicyConfig('default', updates);
   res.json(updated);
+});
+
+router.get('/policy/public', (_req, res) => {
+  const config = getPolicyConfig('default');
+  res.json({
+    max_per_transaction_rupees: config.max_per_transaction_paise / 100,
+    max_daily_velocity_rupees: config.max_daily_velocity_paise / 100,
+    max_daily_txn_count: config.max_daily_txn_count,
+    discount_ceiling_pct: config.discount_ceiling_pct,
+    category_allowlist: config.category_allowlist,
+    currency: 'INR',
+    mode: 'test',
+  });
+});
+
+// --- Mandate endpoints ---
+
+interface MandateRow {
+  id: string;
+  agent_id: string;
+  principal: string;
+  granted_at: string;
+  expires_at: string;
+  revoked: number;
+  scope_max_amount_paise: number;
+  scope_category_json: string;
+  issued_by: string;
+  consent_method: string;
+}
+
+router.get('/mandates', (_req, res) => {
+  const rows = db.prepare('SELECT * FROM mandates ORDER BY granted_at DESC').all() as MandateRow[];
+  const mandates = rows.map(r => ({
+    ...r,
+    scope_categories: JSON.parse(r.scope_category_json),
+    is_active: r.revoked === 0 && new Date(r.expires_at) > new Date(),
+  }));
+  res.json({ mandates });
+});
+
+router.post('/mandates', (req, res) => {
+  const { agent_id, scope_max_amount_paise, scope_categories, expiry_minutes, issued_by } = req.body;
+
+  if (!agent_id || !['growth', 'buyer'].includes(agent_id)) {
+    res.status(400).json({ error: 'agent_id must be "growth" or "buyer"' });
+    return;
+  }
+
+  const id = `mandate_${agent_id}_${randomUUID().slice(0, 8)}`;
+  const now = new Date().toISOString();
+  const minutes = expiry_minutes || 60;
+  const expiresAt = new Date(Date.now() + minutes * 60 * 1000).toISOString();
+  const maxAmount = scope_max_amount_paise || 300000;
+  const categories = scope_categories || ['skincare', 'haircare', 'bodycare', 'wellness', 'accessories'];
+
+  db.prepare(
+    `INSERT INTO mandates (id, agent_id, principal, granted_at, expires_at, revoked, scope_max_amount_paise, scope_category_json, issued_by, consent_method)
+     VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?, 'dashboard_click')`
+  ).run(id, agent_id, 'merchant_default', now, expiresAt, maxAmount, JSON.stringify(categories), issued_by || 'merchant_owner');
+
+  res.json({
+    id,
+    agent_id,
+    granted_at: now,
+    expires_at: expiresAt,
+    scope_max_amount_paise: maxAmount,
+    scope_categories: categories,
+    issued_by: issued_by || 'merchant_owner',
+    consent_method: 'dashboard_click',
+    is_active: true,
+  });
+});
+
+router.post('/mandates/:id/revoke', (req, res) => {
+  const { id } = req.params;
+  const row = db.prepare('SELECT * FROM mandates WHERE id = ?').get(id) as MandateRow | undefined;
+  if (!row) {
+    res.status(404).json({ error: 'Mandate not found' });
+    return;
+  }
+  db.prepare('UPDATE mandates SET revoked = 1 WHERE id = ?').run(id);
+  res.json({ id, revoked: true });
 });
 
 // --- Ledger endpoints ---
