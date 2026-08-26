@@ -21,6 +21,15 @@ interface Props {
   entry: LedgerEntry;
 }
 
+const CHECK_LABELS: Record<string, string> = {
+  mandate: 'Active Mandate',
+  per_transaction_cap: 'Per-Txn Cap',
+  velocity_cap: 'Velocity Limit',
+  allowlist: 'Category Allowlist',
+  discount_ceiling: 'Discount Ceiling',
+  idempotency: 'Idempotency',
+};
+
 export default function DecisionDetail({ entry }: Props) {
   const checks: PolicyCheck[] = JSON.parse(entry.checks_json);
   const proposal = JSON.parse(entry.proposal_json);
@@ -29,58 +38,109 @@ export default function DecisionDetail({ entry }: Props) {
   return (
     <div className="px-4 pb-4 pt-1 bg-gray-50 border-t border-gray-100">
       {/* Proposal summary */}
-      <div className="mb-3">
-        <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Proposal</h4>
-        <div className="text-sm text-gray-700 space-y-0.5">
-          <p><span className="font-medium">Action:</span> {proposal.action}</p>
-          <p><span className="font-medium">Amount:</span> ₹{(proposal.amount_paise / 100).toFixed(0)}</p>
-          <p><span className="font-medium">Category:</span> {proposal.category}</p>
-          <p><span className="font-medium">Reasoning:</span> {proposal.agent_reasoning}</p>
+      <div className="mb-4">
+        <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Proposal</h4>
+        <div className="grid grid-cols-2 gap-2 text-sm">
+          <div className="bg-white p-2 rounded border border-gray-200">
+            <span className="text-[10px] text-gray-400 uppercase">Action</span>
+            <p className="font-medium text-gray-900">{proposal.action?.replace(/_/g, ' ')}</p>
+          </div>
+          <div className="bg-white p-2 rounded border border-gray-200">
+            <span className="text-[10px] text-gray-400 uppercase">Amount</span>
+            <p className="font-mono font-medium text-gray-900">₹{(proposal.amount_paise / 100).toFixed(0)}</p>
+          </div>
+          <div className="bg-white p-2 rounded border border-gray-200">
+            <span className="text-[10px] text-gray-400 uppercase">Category</span>
+            <p className="font-medium text-gray-900">{proposal.category}</p>
+          </div>
+          <div className="bg-white p-2 rounded border border-gray-200">
+            <span className="text-[10px] text-gray-400 uppercase">Agent</span>
+            <p className="font-medium text-gray-900">{entry.agent_type}</p>
+          </div>
         </div>
+        {proposal.agent_reasoning && (
+          <div className="mt-2 bg-white p-2 rounded border border-gray-200">
+            <span className="text-[10px] text-gray-400 uppercase">Agent Reasoning</span>
+            <p className="text-sm text-gray-700 mt-0.5">{proposal.agent_reasoning}</p>
+          </div>
+        )}
       </div>
 
-      {/* Policy checks */}
-      <div className="mb-3">
-        <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Policy Checks</h4>
-        <div className="space-y-1">
-          {checks.map((check, i) => (
-            <div
-              key={i}
-              className={`flex items-center gap-2 text-sm px-2 py-1 rounded ${
-                check.passed ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800'
-              }`}
-            >
-              <span className="font-mono text-xs">{check.passed ? '✓' : '✗'}</span>
-              <span className="font-medium">{check.check_name.replace(/_/g, ' ')}</span>
-              <span className="text-xs opacity-75 ml-auto">{check.detail}</span>
-            </div>
-          ))}
+      {/* Policy checks — ordered pipeline */}
+      <div className="mb-4">
+        <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Policy Gateway Checks</h4>
+        <div className="relative">
+          <div className="absolute left-[11px] top-2 bottom-2 w-0.5 bg-gray-200" />
+          <div className="space-y-1.5">
+            {checks.map((check, i) => (
+              <div
+                key={i}
+                className={`flex items-start gap-3 pl-1 py-1.5 px-2 rounded ${
+                  check.passed
+                    ? 'bg-green-50/60'
+                    : 'bg-red-50 border border-red-200'
+                }`}
+              >
+                <div className={`relative z-10 flex-shrink-0 w-[22px] h-[22px] rounded-full flex items-center justify-center text-xs font-bold ${
+                  check.passed
+                    ? 'bg-green-500 text-white'
+                    : 'bg-red-500 text-white'
+                }`}>
+                  {check.passed ? '✓' : '✗'}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-gray-900">
+                      {CHECK_LABELS[check.check_name] || check.check_name.replace(/_/g, ' ')}
+                    </span>
+                    <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${
+                      check.passed
+                        ? 'bg-green-100 text-green-700'
+                        : 'bg-red-100 text-red-700'
+                    }`}>
+                      {check.passed ? 'PASS' : 'FAIL'}
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-0.5 truncate">{check.detail}</p>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 
       {/* Decision */}
-      <div>
-        <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Decision</h4>
-        <div className="text-sm text-gray-700">
-          <p><span className="font-medium">Verdict:</span>{' '}
-            <span className={decision.verdict === 'approved' ? 'text-green-700 font-semibold' : 'text-red-700 font-semibold'}>
+      <div className="mb-3">
+        <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Decision</h4>
+        <div className={`p-3 rounded-lg border ${
+          decision.verdict === 'approved'
+            ? 'bg-green-50 border-green-200'
+            : 'bg-red-50 border-red-200'
+        }`}>
+          <div className="flex items-center gap-2 mb-1">
+            <span className={`text-sm font-bold ${
+              decision.verdict === 'approved' ? 'text-green-700' : 'text-red-700'
+            }`}>
               {decision.verdict.toUpperCase()}
             </span>
-          </p>
-          {decision.reason_code && (
-            <p><span className="font-medium">Code:</span>{' '}
-              <code className="text-xs bg-gray-200 px-1 py-0.5 rounded">{decision.reason_code}</code>
-            </p>
-          )}
+            {decision.reason_code && (
+              <code className="text-[10px] bg-white/70 border border-gray-200 px-1.5 py-0.5 rounded font-mono">
+                {decision.reason_code}
+              </code>
+            )}
+          </div>
           {decision.reason_text && (
-            <p><span className="font-medium">Detail:</span> {decision.reason_text}</p>
+            <p className="text-sm text-gray-700">{decision.reason_text}</p>
           )}
         </div>
       </div>
 
-      {/* Entry ID for reference */}
-      <div className="mt-2 pt-2 border-t border-gray-200">
-        <span className="text-xs text-gray-400 font-mono">ID: {entry.id}</span>
+      {/* Footer metadata */}
+      <div className="flex items-center justify-between pt-2 border-t border-gray-200">
+        <span className="text-[10px] text-gray-400 font-mono">ID: {entry.id}</span>
+        <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-50 text-amber-600 border border-amber-200">
+          TEST MODE
+        </span>
       </div>
     </div>
   );

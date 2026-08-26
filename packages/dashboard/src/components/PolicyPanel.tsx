@@ -10,11 +10,25 @@ interface PolicyConfig {
   category_allowlist: string[];
 }
 
+interface EditState {
+  max_per_transaction: string;
+  max_daily_velocity: string;
+  max_daily_txn_count: string;
+  discount_ceiling_pct: string;
+  mandate_expiry_minutes: string;
+}
+
 export default function PolicyPanel() {
   const [policy, setPolicy] = useState<PolicyConfig | null>(null);
   const [saving, setSaving] = useState(false);
-  const [editingCap, setEditingCap] = useState<string>('');
-  const [showSuccess, setShowSuccess] = useState(false);
+  const [edit, setEdit] = useState<EditState>({
+    max_per_transaction: '',
+    max_daily_velocity: '',
+    max_daily_txn_count: '',
+    discount_ceiling_pct: '',
+    mandate_expiry_minutes: '',
+  });
+  const [successField, setSuccessField] = useState<string | null>(null);
 
   useEffect(() => {
     fetchPolicy();
@@ -25,31 +39,83 @@ export default function PolicyPanel() {
       const res = await fetch('/api/policy');
       const data = await res.json();
       setPolicy(data);
-      setEditingCap(String(data.max_per_transaction_paise / 100));
+      setEdit({
+        max_per_transaction: String(data.max_per_transaction_paise / 100),
+        max_daily_velocity: String(data.max_daily_velocity_paise / 100),
+        max_daily_txn_count: String(data.max_daily_txn_count),
+        discount_ceiling_pct: String(data.discount_ceiling_pct),
+        mandate_expiry_minutes: String(data.mandate_expiry_minutes),
+      });
     } catch { /* ignore */ }
   };
 
-  const updateCap = async () => {
-    const newCapRupees = parseInt(editingCap);
-    if (isNaN(newCapRupees) || newCapRupees < 0) return;
-
+  const updateField = async (field: string, patchBody: Record<string, number>) => {
     setSaving(true);
     try {
       const res = await fetch('/api/policy', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ max_per_transaction_paise: newCapRupees * 100 }),
+        body: JSON.stringify(patchBody),
       });
       const data = await res.json();
       setPolicy(data);
-      setEditingCap(String(data.max_per_transaction_paise / 100));
-      setShowSuccess(true);
-      setTimeout(() => setShowSuccess(false), 2000);
+      setEdit({
+        max_per_transaction: String(data.max_per_transaction_paise / 100),
+        max_daily_velocity: String(data.max_daily_velocity_paise / 100),
+        max_daily_txn_count: String(data.max_daily_txn_count),
+        discount_ceiling_pct: String(data.discount_ceiling_pct),
+        mandate_expiry_minutes: String(data.mandate_expiry_minutes),
+      });
+      setSuccessField(field);
+      setTimeout(() => setSuccessField(null), 2000);
     } catch { /* ignore */ }
     setSaving(false);
   };
 
+  const handleUpdate = (field: string) => {
+    switch (field) {
+      case 'max_per_transaction': {
+        const v = parseInt(edit.max_per_transaction);
+        if (isNaN(v) || v < 0) return;
+        updateField(field, { max_per_transaction_paise: v * 100 });
+        break;
+      }
+      case 'max_daily_velocity': {
+        const v = parseInt(edit.max_daily_velocity);
+        if (isNaN(v) || v < 0) return;
+        updateField(field, { max_daily_velocity_paise: v * 100 });
+        break;
+      }
+      case 'max_daily_txn_count': {
+        const v = parseInt(edit.max_daily_txn_count);
+        if (isNaN(v) || v < 0) return;
+        updateField(field, { max_daily_txn_count: v });
+        break;
+      }
+      case 'discount_ceiling_pct': {
+        const v = parseInt(edit.discount_ceiling_pct);
+        if (isNaN(v) || v < 0 || v > 100) return;
+        updateField(field, { discount_ceiling_pct: v });
+        break;
+      }
+      case 'mandate_expiry_minutes': {
+        const v = parseInt(edit.mandate_expiry_minutes);
+        if (isNaN(v) || v < 0) return;
+        updateField(field, { mandate_expiry_minutes: v });
+        break;
+      }
+    }
+  };
+
   if (!policy) return <div className="bg-white rounded-lg shadow border border-gray-200 p-4 animate-pulse">Loading policy...</div>;
+
+  const fields: { key: keyof EditState; label: string; prefix?: string; suffix?: string; highlight?: boolean }[] = [
+    { key: 'max_per_transaction', label: 'Per-Transaction Cap', prefix: '₹', highlight: true },
+    { key: 'max_daily_velocity', label: 'Daily Velocity Cap', prefix: '₹' },
+    { key: 'max_daily_txn_count', label: 'Daily Txn Limit' },
+    { key: 'discount_ceiling_pct', label: 'Discount Ceiling', suffix: '%' },
+    { key: 'mandate_expiry_minutes', label: 'Mandate Expiry', suffix: 'min' },
+  ];
 
   return (
     <div className="bg-white rounded-lg shadow border border-gray-200">
@@ -58,60 +124,52 @@ export default function PolicyPanel() {
         <p className="text-xs text-gray-500 mt-0.5">Live-editable merchant policy — changes take effect immediately</p>
       </div>
 
-      <div className="p-4 space-y-4">
-        {/* Per-transaction cap — the key demo control */}
-        <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-          <label className="block text-sm font-medium text-blue-900 mb-1">
-            Per-Transaction Cap
-          </label>
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-blue-700">₹</span>
-            <input
-              type="number"
-              value={editingCap}
-              onChange={(e) => setEditingCap(e.target.value)}
-              className="w-28 px-2 py-1.5 border border-blue-300 rounded text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
-              min="0"
-              step="100"
-            />
-            <button
-              onClick={updateCap}
-              disabled={saving}
-              className="px-3 py-1.5 bg-blue-600 text-white text-xs font-medium rounded hover:bg-blue-700 transition-colors disabled:opacity-50"
-            >
-              {saving ? 'Saving...' : 'Update'}
-            </button>
-            {showSuccess && (
-              <span className="text-xs text-green-600 font-medium">Updated!</span>
+      <div className="p-4 space-y-3">
+        {fields.map(({ key, label, prefix, suffix, highlight }) => (
+          <div
+            key={key}
+            className={`p-3 rounded-lg border ${
+              highlight ? 'bg-blue-50 border-blue-200' : 'bg-gray-50 border-gray-200'
+            }`}
+          >
+            <label className={`block text-xs font-medium mb-1 ${
+              highlight ? 'text-blue-900' : 'text-gray-700'
+            }`}>
+              {label}
+            </label>
+            <div className="flex items-center gap-2">
+              {prefix && <span className={`text-sm ${highlight ? 'text-blue-700' : 'text-gray-500'}`}>{prefix}</span>}
+              <input
+                type="number"
+                value={edit[key]}
+                onChange={(e) => setEdit({ ...edit, [key]: e.target.value })}
+                className={`w-24 px-2 py-1 border rounded text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                  highlight ? 'border-blue-300' : 'border-gray-300'
+                }`}
+                min="0"
+              />
+              {suffix && <span className="text-sm text-gray-500">{suffix}</span>}
+              <button
+                onClick={() => handleUpdate(key)}
+                disabled={saving}
+                className="px-2.5 py-1 bg-blue-600 text-white text-xs font-medium rounded hover:bg-blue-700 transition-colors disabled:opacity-50"
+              >
+                {saving ? '...' : 'Save'}
+              </button>
+              {successField === key && (
+                <span className="text-xs text-green-600 font-medium">Updated!</span>
+              )}
+            </div>
+            {highlight && (
+              <p className="text-xs text-blue-600 mt-1">
+                Lower this below a product price, then run the buyer agent to demo a graceful denial
+              </p>
             )}
           </div>
-          <p className="text-xs text-blue-600 mt-1">
-            Lower this below a product price, then run the buyer agent to demo a graceful denial
-          </p>
-        </div>
-
-        {/* Other policy values (read-only display for now) */}
-        <div className="grid grid-cols-2 gap-3">
-          <div className="p-2 bg-gray-50 rounded border border-gray-200">
-            <p className="text-[10px] text-gray-500 uppercase tracking-wider">Daily Velocity Cap</p>
-            <p className="text-sm font-mono font-medium text-gray-900">₹{(policy.max_daily_velocity_paise / 100).toLocaleString('en-IN')}</p>
-          </div>
-          <div className="p-2 bg-gray-50 rounded border border-gray-200">
-            <p className="text-[10px] text-gray-500 uppercase tracking-wider">Daily Txn Limit</p>
-            <p className="text-sm font-mono font-medium text-gray-900">{policy.max_daily_txn_count}</p>
-          </div>
-          <div className="p-2 bg-gray-50 rounded border border-gray-200">
-            <p className="text-[10px] text-gray-500 uppercase tracking-wider">Discount Ceiling</p>
-            <p className="text-sm font-mono font-medium text-gray-900">{policy.discount_ceiling_pct}%</p>
-          </div>
-          <div className="p-2 bg-gray-50 rounded border border-gray-200">
-            <p className="text-[10px] text-gray-500 uppercase tracking-wider">Mandate Expiry</p>
-            <p className="text-sm font-mono font-medium text-gray-900">{policy.mandate_expiry_minutes} min</p>
-          </div>
-        </div>
+        ))}
 
         {/* Allowed categories */}
-        <div>
+        <div className="pt-2">
           <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Allowed Categories</p>
           <div className="flex flex-wrap gap-1">
             {policy.category_allowlist.map((cat) => (

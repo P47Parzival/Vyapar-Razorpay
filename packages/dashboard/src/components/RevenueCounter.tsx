@@ -4,10 +4,11 @@ interface LedgerEntry {
   agent_type: string;
   final_status: string;
   amount_paise: number;
+  proposal_json: string;
 }
 
 export default function RevenueCounter() {
-  const [stats, setStats] = useState({ recovered: 0, upsell: 0, total: 0 });
+  const [stats, setStats] = useState({ recovered: 0, upsell: 0, buyer: 0 });
 
   useEffect(() => {
     const fetchStats = async () => {
@@ -18,18 +19,24 @@ export default function RevenueCounter() {
 
         let recovered = 0;
         let upsell = 0;
+        let buyer = 0;
 
         for (const entry of entries) {
-          if (entry.final_status !== 'executed' || entry.agent_type !== 'growth') continue;
-          const proposal = JSON.parse((entry as unknown as { proposal_json: string }).proposal_json);
-          if (proposal.original_order_id) {
-            recovered += entry.amount_paise;
-          } else {
-            upsell += entry.amount_paise;
+          if (entry.final_status !== 'executed') continue;
+
+          if (entry.agent_type === 'buyer') {
+            buyer += entry.amount_paise;
+          } else if (entry.agent_type === 'growth') {
+            const proposal = JSON.parse(entry.proposal_json);
+            if (proposal.original_order_id) {
+              recovered += entry.amount_paise;
+            } else {
+              upsell += entry.amount_paise;
+            }
           }
         }
 
-        setStats({ recovered, upsell, total: recovered + upsell });
+        setStats({ recovered, upsell, buyer });
       } catch { /* ignore */ }
     };
 
@@ -45,17 +52,17 @@ export default function RevenueCounter() {
       <div className="bg-white rounded-lg shadow border border-gray-200 p-4">
         <p className="text-xs text-gray-500 font-medium uppercase tracking-wider">Cart Recovery</p>
         <p className="text-2xl font-bold text-orange-600 mt-1">{formatCurrency(stats.recovered)}</p>
-        <p className="text-xs text-gray-400 mt-0.5">Revenue recovered</p>
+        <p className="text-xs text-gray-400 mt-0.5">Recovered via cart-recovery agent</p>
       </div>
       <div className="bg-white rounded-lg shadow border border-gray-200 p-4">
         <p className="text-xs text-gray-500 font-medium uppercase tracking-wider">Upsell Revenue</p>
         <p className="text-2xl font-bold text-purple-600 mt-1">{formatCurrency(stats.upsell)}</p>
-        <p className="text-xs text-gray-400 mt-0.5">Cross-sell / upsell</p>
+        <p className="text-xs text-gray-400 mt-0.5">Upsell revenue generated</p>
       </div>
       <div className="bg-white rounded-lg shadow border border-gray-200 p-4">
-        <p className="text-xs text-gray-500 font-medium uppercase tracking-wider">Total Growth</p>
-        <p className="text-2xl font-bold text-green-600 mt-1">{formatCurrency(stats.total)}</p>
-        <p className="text-xs text-gray-400 mt-0.5">Agent-driven revenue</p>
+        <p className="text-xs text-gray-500 font-medium uppercase tracking-wider">AI Buyer</p>
+        <p className="text-2xl font-bold text-blue-600 mt-1">{formatCurrency(stats.buyer)}</p>
+        <p className="text-xs text-gray-400 mt-0.5">AI-buyer transactions completed</p>
       </div>
     </div>
   );

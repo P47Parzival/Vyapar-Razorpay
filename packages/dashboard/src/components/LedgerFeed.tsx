@@ -102,6 +102,9 @@ export default function LedgerFeed() {
                       <span className="text-xs px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200">
                         {entry.agent_type}
                       </span>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-50 text-amber-600 border border-amber-200">
+                        SIMULATED
+                      </span>
                       <span className="text-xs text-gray-400">
                         {formatTime(entry.timestamp)}
                       </span>
