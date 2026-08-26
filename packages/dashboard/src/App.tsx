@@ -14,9 +14,15 @@ function App() {
           <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200 font-medium">
             TEST MODE
           </span>
+          <span className="text-xs px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-800 border border-indigo-200 font-medium">
+            MCP
+          </span>
         </div>
         <p className="text-gray-600 mt-1">
-          Bounded Agentic Commerce — AI agents that grow revenue, gated by deterministic policy
+          Bounded Agentic Commerce on Razorpay — any AI agent can transact with this merchant, gated by deterministic policy
+        </p>
+        <p className="text-xs text-gray-400 mt-1">
+          Protocol-interoperable: MCP server + .well-known discovery + AP2/UAP-style mandates + webhook triggers
         </p>
       </header>
 

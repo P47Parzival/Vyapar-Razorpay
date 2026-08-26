@@ -138,9 +138,23 @@ export default function DecisionDetail({ entry }: Props) {
       {/* Footer metadata */}
       <div className="flex items-center justify-between pt-2 border-t border-gray-200">
         <span className="text-[10px] text-gray-400 font-mono">ID: {entry.id}</span>
-        <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-50 text-amber-600 border border-amber-200">
-          TEST MODE
-        </span>
+        <div className="flex items-center gap-1.5">
+          {proposal.triggered_by && (
+            <span className={`text-[10px] px-1.5 py-0.5 rounded border ${
+              proposal.triggered_by === 'webhook' ? 'bg-purple-50 text-purple-700 border-purple-200' :
+              proposal.triggered_by === 'mcp_external' ? 'bg-cyan-50 text-cyan-700 border-cyan-200' :
+              proposal.triggered_by === 'internal' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+              'bg-amber-50 text-amber-600 border-amber-200'
+            }`}>
+              {proposal.triggered_by === 'webhook' ? 'WEBHOOK' :
+               proposal.triggered_by === 'mcp_external' ? 'MCP EXTERNAL' :
+               proposal.triggered_by === 'internal' ? 'INTERNAL' : 'SIMULATED'}
+            </span>
+          )}
+          <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-50 text-amber-600 border border-amber-200">
+            TEST MODE
+          </span>
+        </div>
       </div>
     </div>
   );

@@ -1,53 +1,69 @@
 # Vyapar — Bounded Agentic Commerce on Razorpay
 
-AI agents that grow merchant revenue, bounded by deterministic policy and fully auditable.
+Any AI agent can transact with this merchant. Every transaction is gated by deterministic policy, scoped by human-issued mandates, and fully auditable.
 
 ## What This Is
 
 A hackathon project for the theme **"AI Growth & Agentic Commerce."**
 
-Two LLM agents — a **Merchant Growth Agent** (cart recovery, upsell/cross-sell) and a **Buyer Shopping Agent** (AI-powered checkout) — never touch money directly. They only produce structured **Proposals**. A deterministic **Policy Gateway** (zero LLM calls) checks every proposal against merchant-defined rules before anything reaches Razorpay. Every action — approved, denied, or errored — is logged to an append-only audit ledger with a human-readable explanation.
+Vyapar makes a merchant **transactable by any AI buyer, end to end** — discoverable via `.well-known`, connectable via MCP, authorized via AP2/UAP-style mandates — while keeping a human merchant in control through deterministic, live-editable policy.
+
+Two internal LLM agents (Growth Agent, Buyer Agent), one external independent buyer process, and any MCP-capable AI client can submit **Proposals**. A deterministic **Policy Gateway** (6 checks, zero LLM calls) evaluates every proposal against merchant-defined rules. Only if all checks pass does anything reach Razorpay. Every action — approved, denied, or errored — writes exactly one row to an append-only audit ledger.
 
 ### Core Architecture
 
 ```
-┌─────────────┐     ┌─────────────┐
-│ Growth Agent│     │ Buyer Agent │
-│  (Claude)   │     │  (Claude)   │
-└──────┬──────┘     └──────┬──────┘
-       │ Proposal           │ Proposal
-       ▼                    ▼
-┌──────────────────────────────────┐
-│       Policy Gateway             │
-│  (deterministic, no LLM calls)   │
-│  ─ mandate check                 │
-│  ─ per-transaction cap           │
-│  ─ velocity cap                  │
-│  ─ category allowlist            │
-│  ─ discount ceiling              │
-│  ─ idempotency                   │
-└──────────────┬───────────────────┘
-               │ Only if ALL pass
-               ▼
-┌──────────────────────────────────┐
-│    Razorpay MCP Server           │
-│    (test mode only)              │
-└──────────────────────────────────┘
-               │
-               ▼
-┌──────────────────────────────────┐
-│    Audit Ledger (SQLite)         │
-│    Every proposal = 1 row        │
-└──────────────────────────────────┘
+                    ┌───────────────────────────────────────────┐
+                    │         External AI Agents                 │
+                    │  (Claude Desktop, other teams' bots, etc.) │
+                    └─────────────────┬─────────────────────────┘
+                                      │ MCP Protocol
+                    ┌─────────────────▼─────────────────────────┐
+                    │  .well-known/agent-commerce.json           │
+                    │  Discovery: capabilities, policy, endpoint │
+                    └─────────────────┬─────────────────────────┘
+                                      │
+┌─────────────┐   ┌─────────────┐    │    ┌──────────────────┐
+│ Growth Agent│   │ Buyer Agent │    │    │ Webhook Trigger  │
+│  (Claude)   │   │  (Claude)   │    │    │ (payment events) │
+└──────┬──────┘   └──────┬──────┘    │    └────────┬─────────┘
+       │ Proposal         │ Proposal  │ Proposal    │ Auto-trigger
+       └──────────────────┴───────────┴─────────────┘
+                          │
+                          ▼
+       ┌──────────────────────────────────────────────┐
+       │         Mandate Check (AP2/UAP-style)        │
+       │  Human-issued, scoped, time-boxed, revocable │
+       └──────────────────────┬───────────────────────┘
+                              ▼
+       ┌──────────────────────────────────────────────┐
+       │           Policy Gateway (6 checks)          │
+       │       deterministic • zero LLM calls         │
+       │  ─ mandate (scope: amount + category)        │
+       │  ─ per-transaction cap                       │
+       │  ─ velocity cap (daily total + count)        │
+       │  ─ category allowlist                        │
+       │  ─ discount ceiling                          │
+       │  ─ idempotency (dedup)                       │
+       └──────────────────────┬───────────────────────┘
+                              │ Only if ALL pass
+                              ▼
+       ┌──────────────────────────────────────────────┐
+       │       Razorpay MCP Server (test mode)        │
+       └──────────────────────┬───────────────────────┘
+                              ▼
+       ┌──────────────────────────────────────────────┐
+       │    Audit Ledger (SQLite, append-only)        │
+       │    Every proposal = exactly 1 row            │
+       └──────────────────────────────────────────────┘
 ```
 
 **Key invariants:**
 - Agents NEVER get Razorpay credentials or call Razorpay directly
 - Policy Gateway contains ZERO LLM calls — only deterministic code
 - Every proposal writes exactly one ledger row (approved, denied, or errored)
+- Mandates are human-issued, scoped (amount + category), time-boxed, and revocable
 - Test mode only — no real money moves
-
-For the full build plan and design rationale, see [BUILD_PLAN.md](./BUILD_PLAN.md).
 
 ---
 
@@ -57,6 +73,8 @@ For the full build plan and design rationale, see [BUILD_PLAN.md](./BUILD_PLAN.m
 |-------|-----------|
 | LLM | Claude Sonnet via AWS Bedrock Converse API |
 | Payments | Razorpay MCP Server (test mode, StreamableHTTP) |
+| Protocol | MCP Server (StreamableHTTP) + .well-known discovery |
+| Mandates | AP2/UAP/UPI Circle-style delegation model |
 | Backend | Express + TypeScript (tsx) |
 | Database | SQLite via better-sqlite3 (WAL mode) |
 | Frontend | React + Vite + Tailwind CSS |
@@ -86,6 +104,7 @@ Create a `.env` file in the project root:
 ```env
 RAZORPAY_KEY_ID=rzp_test_...
 RAZORPAY_KEY_SECRET=...
+RAZORPAY_WEBHOOK_SECRET=whsec_...
 BEDROCK_API_KEY=ABSK...
 AWS_REGION=ap-south-1
 BEDROCK_MODEL_ID=global.anthropic.claude-sonnet-4-6
@@ -101,70 +120,69 @@ npm run dev
 # Or separately:
 npm run dev:server    # Express API on :3001
 npm run dev:dashboard # Vite dev server on :5173 (proxies /api to :3001)
+
+# Run the external buyer agent (separate terminal):
+npm run external-buyer -- "Buy me a birthday gift under 1000 rupees"
 ```
 
 Open **http://localhost:5173** in your browser.
 
 ---
 
-## Demo Script
+## Demo Script (90-second version)
 
 Follow these steps in order during the live demo. No code changes needed.
+Two terminal windows: one for the server/dashboard, one for the external buyer.
 
-### 1. Show the empty state
+### 1. Dashboard Tour (15s)
 
-- Open the dashboard at `http://localhost:5173`
-- Point out: empty audit ledger, the 3 stat cards at zero, the Policy Controls panel showing all current caps (Per-Transaction Cap: ₹3,000, Daily Velocity: ₹10,000, etc.)
-- Note the **TEST MODE** badge in the header
+- Open `http://localhost:5173`
+- Point out: **Protocol Surface** panel (MCP endpoint, manifest URL, webhook receiver, external buyer command)
+- Show: empty ledger, stat cards, policy controls, mandate panel
 
-### 2. Cart Recovery Agent
+### 2. Issue a Scoped Mandate (10s)
 
-- In the **Growth Agent** section, click **"Simulate Abandoned Cart"**
-- Wait for the agent to run (~5-10 seconds)
-- Show the result: agent's reasoning, the proposal it drafted, gateway approval
-- In the **Audit Ledger**, a new green row appears with explanation
-- The **Cart Recovery** stat card updates with the recovered amount
-- Note the **SIMULATED** badge on the ledger entry
+- Click **"Issue Mandate"** in the Mandates panel
+- Set: Agent = Buyer, Max = 1000, Categories = skincare only, Expiry = 30 min
+- Click **Issue** — the mandate appears with ACTIVE badge
+- "This is the human authorization — same shape as NPCI's proposed UAP on UPI Circle"
 
-### 3. AI Buyer Agent — successful purchase
+### 3. Internal Buyer — Successful Purchase (15s)
 
-- In the **AI Buyer Agent** input, type: `Find me a good moisturizer under ₹1500`
-- Click **Shop**
-- Wait for the agent to browse the catalog, pick a product, and propose a purchase
-- Show: proposal approved, real Razorpay test-mode payment link created
-- New green ledger row appears, **AI Buyer** stat card updates
+- In AI Buyer Agent, type: `Find me a moisturizer under 700 rupees`
+- Click **Shop** — agent browses catalog, proposes, gateway approves
+- Green ledger row appears with **INTERNAL** badge
+- "Our own buyer agent, bounded by the mandate scope and all 6 policy checks"
 
-### 4. Lower the per-transaction cap
+### 4. External Buyer — Agent-to-Agent Commerce (20s)
 
-- In **Policy Controls**, change the Per-Transaction Cap from `3000` to `300`
-- Click **Save** — confirm "Updated!" appears
-- Explain: "I just lowered the cap. The agent doesn't know. The gateway will enforce it."
+- **Switch to second terminal**
+- Run: `npm run external-buyer -- "Buy me a skincare gift under 900 rupees"`
+- Show the output: discovers merchant via manifest, connects MCP, reasons, proposes
+- **Switch back to dashboard** — new green row with **MCP EXTERNAL** badge
+- "This is a separate process, zero shared code, transacting through the protocol surface"
 
-### 5. AI Buyer Agent — graceful denial
+### 5. Mandate Scope Enforcement (15s)
 
-- In the AI Buyer input, type: `I want to buy the Vitamin C Serum`
-- Click **Shop**
-- The agent proposes (₹890) → gateway denies with `PER_TRANSACTION_CAP_EXCEEDED`
-- Show the result: agent's natural-language explanation acknowledging the denial, suggesting alternatives
-- A **red** ledger row appears with the denial reason
-- **No Razorpay call was made** — the gateway stopped it
+- In AI Buyer, type: `Buy the Collagen Powder` (wellness, ₹1250)
+- Gateway denies with **MANDATE_SCOPE_EXCEEDED** — red row appears
+- "The agent doesn't know about the mandate scope. The gateway enforces it deterministically."
+- Click to expand: show the pipeline check that failed
 
-### 6. Inspect the audit trail
+### 6. Revoke Mandate (10s)
 
-- Click the red ledger row to expand it
-- Walk through the **Policy Gateway Checks** pipeline:
-  - Mandate: PASS
-  - Per-Txn Cap: **FAIL** — "proposed ₹890 exceeds cap of ₹300"
-  - (remaining checks not reached — gateway stops at first failure)
-- Show the **Decision** card: DENIED, reason code, explanation
-- Point out: this is the "explainable, bounded, gated" requirement fulfilled
+- Click **Revoke** on the active mandate
+- Try: `Buy the Gentle Face Wash` (₹450, skincare — normally fine)
+- Gateway denies with **MANDATE_EXPIRED** — "Revocation is instant and absolute"
 
-### 7. Restore and re-run (if time)
+### 7. Webhook-triggered Growth (bonus, 15s)
 
-- Change cap back to `3000`, click Save
-- Re-run: `Buy me the Vitamin C Serum`
-- This time it succeeds — green row, payment link created
-- "This proves the policy is live-editable, not a hardcoded demo path"
+- Point to a green ledger row with **WEBHOOK** badge (if one exists from a real payment)
+- "When a real Razorpay payment completes, the webhook fires, signature is verified, and the Growth Agent automatically runs an upsell — no human click needed"
+
+### Closing Framing
+
+> "This mandate model — a principal delegating a capped, revocable authority to an agent — is the same shape NPCI's proposed Unified Agent Protocol is standardizing on top of UPI Circle. We didn't implement UAP (it isn't live yet). We implemented the pattern it's standardizing, honestly labeled, on real Razorpay rails."
 
 ---
 
@@ -175,16 +193,22 @@ Vyapar/
 ├── packages/
 │   ├── server/
 │   │   └── src/
-│   │       ├── agents/         # Growth + Buyer agents (LLM tool-use)
-│   │       ├── gateway/        # Policy Gateway + 6 check modules
-│   │       ├── razorpay/       # MCP client + execution wrapper
-│   │       ├── ledger/         # Append-only audit log + explainer
-│   │       ├── db/             # SQLite schema, seed, client
-│   │       └── api/            # Express routes + SSE
-│   └── dashboard/
-│       └── src/
-│           └── components/     # React UI (LedgerFeed, PolicyPanel, etc.)
-├── BUILD_PLAN.md               # Full design document
+│   │       ├── agents/         # Growth + Buyer agents (LLM tool-use loops)
+│   │       ├── gateway/        # Policy Gateway + 6 deterministic check modules
+│   │       ├── mcp-server/     # Vyapar as MCP server (external agent entry point)
+│   │       ├── webhooks/       # Razorpay webhook receiver (signature-verified)
+│   │       ├── razorpay/       # MCP client → Razorpay execution
+│   │       ├── ledger/         # Append-only audit log + human-readable explainer
+│   │       ├── catalog/        # Product catalog + API
+│   │       ├── db/             # SQLite schema, migrations, seed
+│   │       └── api/            # REST routes (policy, mandates, agents, ledger SSE)
+│   ├── dashboard/
+│   │   └── src/
+│   │       └── components/     # React UI (LedgerFeed, MandatePanel, PolicyPanel, etc.)
+│   └── external-buyer-demo/
+│       └── src/                # Independent AI buyer (zero shared code with server)
+├── BUILD_PLAN.md               # Original design document (Steps 1-10)
+├── BUILD_PLAN2.md              # Protocol interoperability plan (Steps 1-6)
 ├── .env                        # Credentials (not committed)
 └── package.json                # Workspace root
 ```
@@ -193,8 +217,32 @@ Vyapar/
 
 ## Architecture Highlights for Judges
 
-1. **Separation of concerns**: Agents propose, gateway decides, Razorpay executes. No layer does another's job.
-2. **Denial is first-class**: A denied proposal is a normal return value with a structured reason — not an error. The agent handles it gracefully.
-3. **Zero-trust agent boundary**: Even if the LLM hallucinates a ₹50,000 transaction, the gateway's deterministic cap check will deny it. No prompt engineering required for safety.
-4. **Full audit trail**: Every row has: who proposed, what they proposed, which checks ran, what passed/failed, and what happened on Razorpay (if anything).
-5. **Live policy editing**: A merchant can change caps in real-time; no deploy needed. The next agent proposal immediately sees the new rules.
+1. **Protocol-interoperable**: Any MCP-capable AI agent can discover (`.well-known`), connect (MCP), and transact with this merchant — no custom integration code on the buyer's side.
+
+2. **Mandate model mirrors UAP/UPI Circle**: Human-issued, scoped (amount + category), time-boxed, instantly revocable. Not an API key — a delegation. `MANDATE_SCOPE_EXCEEDED` is a distinct denial from `MANDATE_EXPIRED`.
+
+3. **True agent-to-agent proof**: The external buyer process (`packages/external-buyer-demo/`) shares zero code with the server. It discovers the merchant, reasons with its own LLM, and proposes through the protocol — landing in the same ledger, same 6 checks.
+
+4. **Separation of concerns**: Agents propose, gateway decides, Razorpay executes. No layer does another's job. The gateway is the ONLY thing that calls Razorpay.
+
+5. **Denial is first-class**: A denied proposal is a normal return value with a structured reason code, not an exception. Agents handle denials gracefully.
+
+6. **Zero-trust agent boundary**: Even if the LLM hallucinates a ₹50,000 transaction, the gateway's deterministic cap check denies it. No prompt engineering required for safety.
+
+7. **Full audit trail**: Every row records: who proposed, what they proposed, which checks ran, what passed/failed, what happened on Razorpay (if anything), and a human-readable explanation.
+
+8. **Live policy editing**: A merchant can change caps in real-time. The next proposal immediately sees the new rules.
+
+9. **Real event triggers**: The Growth Agent's upsell flow can fire automatically from a Razorpay `payment_link.paid` webhook — signature-verified, not just a button click.
+
+10. **Honest labeling**: Every simplification is explicitly labeled (test mode, `consent_method: dashboard_click`, "not a certified UCP implementation"). No overclaiming.
+
+---
+
+## Honesty Notes
+
+- **Not a full protocol implementation**: We publish a `.well-known` manifest and an MCP server in the *spirit* of UCP/ACP discovery conventions. We do not claim spec compliance.
+- **Mandates are not cryptographically signed**: `consent_method: dashboard_click` is an honest label. A production system would use AP2-style proof-of-authorization.
+- **Webhook secret is a shared HMAC key**: Standard Razorpay practice, but not a zero-knowledge proof.
+- **Test mode only**: All Razorpay calls use test-mode keys. No real money moves.
+- **UAP is not live**: We implement the *pattern* NPCI is standardizing, not the protocol itself.

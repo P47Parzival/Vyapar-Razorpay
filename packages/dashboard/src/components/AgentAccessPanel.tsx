@@ -7,6 +7,8 @@ export default function AgentAccessPanel() {
   const baseUrl = `http://${host}`;
   const manifestUrl = `${baseUrl}/.well-known/agent-commerce.json`;
   const mcpEndpoint = `${baseUrl}/mcp`;
+  const webhookEndpoint = `${baseUrl}/api/webhooks/razorpay`;
+  const externalBuyerCmd = 'npm run external-buyer';
 
   const copyToClipboard = (text: string, label: string) => {
     navigator.clipboard.writeText(text);
@@ -17,11 +19,11 @@ export default function AgentAccessPanel() {
   return (
     <div className="bg-white rounded-lg shadow border border-gray-200">
       <div className="px-4 py-3 border-b border-gray-200">
-        <h2 className="text-lg font-semibold text-gray-900">Agent Access</h2>
-        <p className="text-xs text-gray-500 mt-0.5">Any MCP-capable AI agent can transact with this merchant</p>
+        <h2 className="text-lg font-semibold text-gray-900">Protocol Surface</h2>
+        <p className="text-xs text-gray-500 mt-0.5">Discoverable + transactable by any external AI agent</p>
       </div>
 
-      <div className="p-4 space-y-3">
+      <div className="p-4 space-y-2.5">
         <div className="p-2.5 bg-indigo-50 border border-indigo-200 rounded-lg">
           <div className="flex items-center justify-between">
             <div>
@@ -52,8 +54,38 @@ export default function AgentAccessPanel() {
           </div>
         </div>
 
+        <div className="p-2.5 bg-purple-50 border border-purple-200 rounded-lg">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-[10px] text-purple-500 uppercase tracking-wider font-medium">Webhook Receiver</p>
+              <p className="text-xs font-mono text-purple-900 mt-0.5">{webhookEndpoint}</p>
+            </div>
+            <button
+              onClick={() => copyToClipboard(webhookEndpoint, 'webhook')}
+              className="px-2 py-1 text-[10px] bg-purple-600 text-white rounded hover:bg-purple-700 transition-colors"
+            >
+              {copied === 'webhook' ? 'Copied!' : 'Copy'}
+            </button>
+          </div>
+        </div>
+
+        <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-lg">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-[10px] text-emerald-600 uppercase tracking-wider font-medium">External Buyer Agent</p>
+              <p className="text-xs font-mono text-emerald-900 mt-0.5">{externalBuyerCmd}</p>
+            </div>
+            <button
+              onClick={() => copyToClipboard(externalBuyerCmd, 'buyer')}
+              className="px-2 py-1 text-[10px] bg-emerald-600 text-white rounded hover:bg-emerald-700 transition-colors"
+            >
+              {copied === 'buyer' ? 'Copied!' : 'Copy'}
+            </button>
+          </div>
+        </div>
+
         <div className="text-[10px] text-gray-400 leading-relaxed">
-          Point any MCP client (Claude Desktop, Claude Code, or another agent) at the MCP endpoint to browse, propose, and transact — bounded by the same policy gateway.
+          Any MCP client (Claude Desktop, Claude Code, or a standalone agent) can discover, browse, and transact — bounded by the same 6-check policy gateway. The external buyer demo runs from a separate process with zero shared code.
         </div>
       </div>
     </div>

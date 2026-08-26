@@ -6,6 +6,7 @@ import cors from 'cors';
 import { seedDatabase } from './db/seed.js';
 import catalogRouter from './catalog/catalog-api.js';
 import apiRouter from './api/routes.js';
+import webhookRouter from './webhooks/razorpay-webhook.js';
 import { handleMcpPost, handleMcpGet, handleMcpDelete } from './mcp-server/vyapar-mcp-server.js';
 
 seedDatabase();
@@ -14,7 +15,11 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({
+  verify: (req: any, _res, buf) => {
+    req.rawBody = buf.toString();
+  },
+}));
 
 app.get('/health', (_req, res) => {
   res.status(200).json({ status: 'ok', service: 'vyapar-server' });
@@ -22,6 +27,9 @@ app.get('/health', (_req, res) => {
 
 app.use('/api', catalogRouter);
 app.use('/api', apiRouter);
+
+// Razorpay webhook — signature-verified, triggers Growth Agent on payment events
+app.use('/api', webhookRouter);
 
 // MCP Server — exposes Vyapar as a tool provider for external AI agents
 app.post('/mcp', handleMcpPost);

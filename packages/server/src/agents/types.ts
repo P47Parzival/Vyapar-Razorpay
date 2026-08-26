@@ -18,6 +18,7 @@ export const ProposalSchema = z.object({
   discount_pct: z.number().min(0).max(100).optional(),
   original_order_id: z.string().optional(),
   item_ids: z.array(z.string()).optional(),
+  triggered_by: z.enum(['simulated_button', 'webhook', 'mcp_external', 'internal']).optional(),
 });
 
 export type Proposal = z.infer<typeof ProposalSchema>;

@@ -121,6 +121,8 @@ Please analyze the completed order, identify a good cross-sell or upsell opportu
       if (toolCall.name === 'submit_proposal') {
         const input = toolCall.input;
 
+        const triggeredBy = (scenario.context.triggered_by as string) || 'simulated_button';
+
         const proposal: Proposal = ProposalSchema.parse({
           proposal_id: `prop_growth_${uuidv4().slice(0, 8)}`,
           agent_type: 'growth',
@@ -136,6 +138,7 @@ Please analyze the completed order, identify a good cross-sell or upsell opportu
           discount_pct: input.discount_pct as number | undefined,
           original_order_id: input.original_order_id as string | undefined,
           item_ids: input.item_ids as string[] | undefined,
+          triggered_by: triggeredBy,
         });
 
         result.proposal = proposal;

@@ -73,6 +73,25 @@ export default function LedgerFeed() {
     return d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
   };
 
+  const getTriggerBadge = (entry: LedgerEntry) => {
+    try {
+      const proposal = JSON.parse(entry.proposal_json);
+      const trigger = proposal.triggered_by || 'simulated_button';
+      switch (trigger) {
+        case 'webhook':
+          return { label: 'WEBHOOK', classes: 'bg-purple-50 text-purple-700 border-purple-200' };
+        case 'mcp_external':
+          return { label: 'MCP EXTERNAL', classes: 'bg-cyan-50 text-cyan-700 border-cyan-200' };
+        case 'internal':
+          return { label: 'INTERNAL', classes: 'bg-blue-50 text-blue-700 border-blue-200' };
+        default:
+          return { label: 'SIMULATED', classes: 'bg-amber-50 text-amber-600 border-amber-200' };
+      }
+    } catch {
+      return { label: 'SIMULATED', classes: 'bg-amber-50 text-amber-600 border-amber-200' };
+    }
+  };
+
   return (
     <div className="bg-white rounded-lg shadow border border-gray-200">
       <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
@@ -102,9 +121,14 @@ export default function LedgerFeed() {
                       <span className="text-xs px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200">
                         {entry.agent_type}
                       </span>
-                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-50 text-amber-600 border border-amber-200">
-                        SIMULATED
-                      </span>
+                      {(() => {
+                        const badge = getTriggerBadge(entry);
+                        return (
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded border ${badge.classes}`}>
+                            {badge.label}
+                          </span>
+                        );
+                      })()}
                       <span className="text-xs text-gray-400">
                         {formatTime(entry.timestamp)}
                       </span>

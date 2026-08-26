@@ -185,6 +185,7 @@ router.post('/agents/growth/cart-recovery', async (req, res) => {
         cart_total_paise: 144000,
         abandoned_at: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
         reason: 'Payment failed — card declined',
+        triggered_by: 'simulated_button',
       },
     };
 
@@ -211,6 +212,7 @@ router.post('/agents/growth/upsell', async (req, res) => {
           total_paise: 45000,
           completed_at: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
         },
+        triggered_by: 'simulated_button',
       },
     };
 

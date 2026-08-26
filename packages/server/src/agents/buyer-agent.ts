@@ -159,6 +159,7 @@ Please help this customer shop. Start by browsing the catalog, then propose a pu
           requested_at: new Date().toISOString(),
           description: input.description as string,
           item_ids: input.item_ids as string[] | undefined,
+          triggered_by: 'internal',
         });
 
         result.proposal = proposal;

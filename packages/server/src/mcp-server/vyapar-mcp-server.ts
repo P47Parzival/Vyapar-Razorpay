@@ -111,6 +111,7 @@ function createMcpServer(): McpServer {
         requested_at: new Date().toISOString(),
         description: description || `External agent purchase: ${category}`,
         item_ids: item_ids || [],
+        triggered_by: 'mcp_external',
       });
 
       const result = await processProposal(proposal);

@@ -1,0 +1,15 @@
+{
+  "name": "vyapar-external-buyer-demo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Independent AI buyer agent that transacts with Vyapar through the MCP protocol surface only. Shares NO code with the Vyapar server.",
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.mjs",
+    "buy": "node src/index.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.1",
+    "@aws-sdk/client-bedrock-runtime": "^3.700.0"
+  }
+}
