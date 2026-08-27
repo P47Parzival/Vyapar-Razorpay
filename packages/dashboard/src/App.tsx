@@ -1,9 +1,11 @@
 import LedgerFeed from './components/LedgerFeed';
+import OrdersAndCustomers from './components/OrdersAndCustomers';
 import AgentTriggers from './components/AgentTriggers';
 import RevenueCounter from './components/RevenueCounter';
 import PolicyPanel from './components/PolicyPanel';
 import AgentAccessPanel from './components/AgentAccessPanel';
 import MandatePanel from './components/MandatePanel';
+import MerchantOnboarding from './components/MerchantOnboarding';
 
 function App() {
   return (
@@ -30,10 +32,12 @@ function App() {
         <RevenueCounter />
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2">
+          <div className="lg:col-span-2 space-y-6">
             <LedgerFeed />
+            <OrdersAndCustomers />
           </div>
           <div className="space-y-4">
+            <MerchantOnboarding />
             <MandatePanel />
             <AgentAccessPanel />
             <PolicyPanel />

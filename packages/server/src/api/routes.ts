@@ -169,6 +169,93 @@ router.get('/ledger/:id', (req, res) => {
   });
 });
 
+// --- Orders & Customers endpoints ---
+
+router.get('/orders', (req, res) => {
+  const source = req.query.source as string | undefined;
+  const limit = parseInt(req.query.limit as string) || 50;
+
+  let rows;
+  if (source) {
+    rows = db.prepare('SELECT * FROM orders WHERE source = ? ORDER BY created_at DESC LIMIT ?').all(source, limit);
+  } else {
+    rows = db.prepare('SELECT * FROM orders ORDER BY created_at DESC LIMIT ?').all(limit);
+  }
+
+  const orders = (rows as any[]).map(r => ({
+    ...r,
+    item_ids: JSON.parse(r.item_ids_json),
+  }));
+  res.json({ orders, count: orders.length });
+});
+
+router.get('/customers', (req, res) => {
+  const limit = parseInt(req.query.limit as string) || 50;
+
+  const rows = db.prepare('SELECT * FROM customers ORDER BY last_purchase_at DESC LIMIT ?').all(limit);
+  res.json({ customers: rows, count: (rows as any[]).length });
+});
+
+// --- Onboarding endpoints ---
+
+router.get('/onboarding/status', (_req, res) => {
+  const config = getPolicyConfig('default');
+  const itemCount = (db.prepare('SELECT COUNT(*) as count FROM catalog_items').get() as { count: number }).count;
+  res.json({
+    catalog_connected: itemCount > 0,
+    catalog_item_count: itemCount,
+    agent_commerce_enabled: config.agent_commerce_enabled,
+  });
+});
+
+router.post('/onboarding/import-catalog', (_req, res) => {
+  const existingCount = (db.prepare('SELECT COUNT(*) as count FROM catalog_items').get() as { count: number }).count;
+  if (existingCount > 0) {
+    res.json({ success: true, message: 'Catalog already connected', items_imported: existingCount, was_already_connected: true });
+    return;
+  }
+
+  const catalogItems = [
+    { id: 'item_001', title: 'Gentle Face Wash', description: 'Soothing gel cleanser for all skin types, 150ml', price_paise: 45000, category: 'skincare', stock: 80, pairs_with_ids: '["item_002","item_003"]' },
+    { id: 'item_002', title: 'Daily Moisturizer SPF 30', description: 'Lightweight hydrating moisturizer with sun protection, 100ml', price_paise: 65000, category: 'skincare', stock: 60, pairs_with_ids: '["item_001","item_004"]' },
+    { id: 'item_003', title: 'Vitamin C Serum', description: 'Brightening serum with 15% Vitamin C, 30ml', price_paise: 89000, category: 'skincare', stock: 45, pairs_with_ids: '["item_001","item_002"]' },
+    { id: 'item_004', title: 'Hydrating Toner', description: 'Alcohol-free toner with hyaluronic acid, 200ml', price_paise: 55000, category: 'skincare', stock: 70, pairs_with_ids: '["item_001","item_003"]' },
+    { id: 'item_005', title: 'Anti-Dandruff Shampoo', description: 'Zinc pyrithione shampoo for flake-free hair, 250ml', price_paise: 38000, category: 'haircare', stock: 90, pairs_with_ids: '["item_006","item_007"]' },
+    { id: 'item_006', title: 'Nourishing Conditioner', description: 'Deep conditioning treatment for dry hair, 200ml', price_paise: 42000, category: 'haircare', stock: 75, pairs_with_ids: '["item_005","item_007"]' },
+    { id: 'item_007', title: 'Hair Growth Oil', description: 'Ayurvedic blend with bhringraj and amla, 100ml', price_paise: 35000, category: 'haircare', stock: 100, pairs_with_ids: '["item_005","item_006"]' },
+    { id: 'item_008', title: 'Body Lotion Cocoa Butter', description: 'Rich body lotion for deep hydration, 300ml', price_paise: 48000, category: 'bodycare', stock: 65, pairs_with_ids: '["item_009","item_010"]' },
+    { id: 'item_009', title: 'Exfoliating Body Scrub', description: 'Coffee-walnut scrub for smooth skin, 200g', price_paise: 52000, category: 'bodycare', stock: 55, pairs_with_ids: '["item_008","item_010"]' },
+    { id: 'item_010', title: 'Natural Deodorant Stick', description: 'Aluminum-free deodorant, lavender scent, 50g', price_paise: 32000, category: 'bodycare', stock: 120, pairs_with_ids: '["item_008","item_009"]' },
+    { id: 'item_011', title: 'Ashwagandha Capsules', description: 'Stress relief supplement, 60 capsules', price_paise: 59000, category: 'wellness', stock: 40, pairs_with_ids: '["item_012","item_013"]' },
+    { id: 'item_012', title: 'Multivitamin Gummies', description: 'Daily essential vitamins, mixed fruit, 30 gummies', price_paise: 45000, category: 'wellness', stock: 85, pairs_with_ids: '["item_011","item_013"]' },
+    { id: 'item_013', title: 'Collagen Powder', description: 'Marine collagen for skin & joints, 200g unflavored', price_paise: 125000, category: 'wellness', stock: 30, pairs_with_ids: '["item_011","item_003"]' },
+    { id: 'item_014', title: 'Jade Face Roller', description: 'Natural jade stone roller for facial massage', price_paise: 75000, category: 'accessories', stock: 50, pairs_with_ids: '["item_003","item_004"]' },
+    { id: 'item_015', title: 'Bamboo Makeup Brush Set', description: 'Eco-friendly 8-piece brush set with pouch', price_paise: 95000, category: 'accessories', stock: 35, pairs_with_ids: '["item_014"]' },
+  ];
+
+  const insert = db.prepare(
+    'INSERT OR IGNORE INTO catalog_items (id, title, description, price_paise, category, stock, pairs_with_ids) VALUES (?, ?, ?, ?, ?, ?, ?)'
+  );
+  const insertMany = db.transaction(() => {
+    for (const item of catalogItems) {
+      insert.run(item.id, item.title, item.description, item.price_paise, item.category, item.stock, item.pairs_with_ids);
+    }
+  });
+  insertMany();
+
+  res.json({ success: true, message: 'Catalog imported successfully', items_imported: catalogItems.length, was_already_connected: false });
+});
+
+router.patch('/onboarding/toggle', (req, res) => {
+  const { agent_commerce_enabled } = req.body;
+  if (typeof agent_commerce_enabled !== 'boolean') {
+    res.status(400).json({ error: 'agent_commerce_enabled must be a boolean' });
+    return;
+  }
+  const updated = updatePolicyConfig('default', { agent_commerce_enabled });
+  res.json({ agent_commerce_enabled: updated.agent_commerce_enabled });
+});
+
 // --- Agent trigger endpoints ---
 
 router.post('/agents/growth/cart-recovery', async (req, res) => {

@@ -9,6 +9,7 @@ export interface PolicyConfig {
   mandate_expiry_minutes: number;
   merchant_allowlist: string[];
   category_allowlist: string[];
+  agent_commerce_enabled: boolean;
   updated_at: string;
 }
 
@@ -21,6 +22,7 @@ interface PolicyRow {
   mandate_expiry_minutes: number;
   merchant_allowlist_json: string;
   category_allowlist_json: string;
+  agent_commerce_enabled: number;
   updated_at: string;
 }
 
@@ -35,6 +37,7 @@ export function getPolicyConfig(merchantId: string = 'default'): PolicyConfig {
     mandate_expiry_minutes: row.mandate_expiry_minutes,
     merchant_allowlist: JSON.parse(row.merchant_allowlist_json),
     category_allowlist: JSON.parse(row.category_allowlist_json),
+    agent_commerce_enabled: row.agent_commerce_enabled === 1,
     updated_at: row.updated_at,
   };
 }
@@ -50,6 +53,7 @@ export function updatePolicyConfig(merchantId: string, updates: Partial<Omit<Pol
     mandate_expiry_minutes: updates.mandate_expiry_minutes ?? current.mandate_expiry_minutes,
     merchant_allowlist: updates.merchant_allowlist ?? current.merchant_allowlist,
     category_allowlist: updates.category_allowlist ?? current.category_allowlist,
+    agent_commerce_enabled: updates.agent_commerce_enabled ?? current.agent_commerce_enabled,
   };
 
   db.prepare(
@@ -61,6 +65,7 @@ export function updatePolicyConfig(merchantId: string, updates: Partial<Omit<Pol
       mandate_expiry_minutes = ?,
       merchant_allowlist_json = ?,
       category_allowlist_json = ?,
+      agent_commerce_enabled = ?,
       updated_at = datetime('now')
     WHERE merchant_id = ?`
   ).run(
@@ -71,6 +76,7 @@ export function updatePolicyConfig(merchantId: string, updates: Partial<Omit<Pol
     newConfig.mandate_expiry_minutes,
     JSON.stringify(newConfig.merchant_allowlist),
     JSON.stringify(newConfig.category_allowlist),
+    newConfig.agent_commerce_enabled ? 1 : 0,
     merchantId
   );
 

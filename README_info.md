@@ -16,7 +16,7 @@
 7. [Product Catalog](#7-product-catalog)
 8. [Policy System (Bounded Rules)](#8-policy-system-bounded-rules)
 9. [Policy Gateway — The 6 Checks](#9-policy-gateway--the-6-checks)
-10. [Mandate System](#10-mandate-system)
+10. [Mandate System (AP2/UAP/UPI Circle)](#10-mandate-system-ap2uapupi-circle)
 11. [LLM Integration (AWS Bedrock)](#11-llm-integration-aws-bedrock)
 12. [Growth Agent](#12-growth-agent)
 13. [Buyer Agent](#13-buyer-agent)
@@ -32,19 +32,30 @@
 23. [Data Flow: End-to-End Sequence](#23-data-flow-end-to-end-sequence)
 24. [Key Decisions & Trade-offs](#24-key-decisions--trade-offs)
 25. [Known Limitations](#25-known-limitations)
+26. [MCP Server — Vyapar as a Tool Provider](#26-mcp-server--vyapar-as-a-tool-provider)
+27. [Discovery Manifest (.well-known)](#27-discovery-manifest-well-known)
+28. [Webhook Receiver (Razorpay Events)](#28-webhook-receiver-razorpay-events)
+29. [External Buyer Agent (Independent Process)](#29-external-buyer-agent-independent-process)
+30. [Protocol Interoperability Summary](#30-protocol-interoperability-summary)
 
 ---
 
 ## 1. Project Overview
 
-Vyapar demonstrates that AI agents can grow merchant revenue **safely** — by architectural constraint, not by hoping prompts behave. Two LLM agents operate in a bounded sandbox:
+Vyapar demonstrates that AI agents can grow merchant revenue **safely** — by architectural constraint, not by hoping prompts behave — and that **any external AI agent** can discover and transact with this merchant through standard protocols.
 
-- **Merchant Growth Agent** — recovers abandoned carts, proposes upsells/cross-sells
-- **AI Buyer Agent** — shops on behalf of a customer (proves any AI can transact with this merchant)
+Four agent entry points exist:
 
-Neither agent can touch Razorpay. They can only produce structured **Proposals**. A deterministic **Policy Gateway** (zero LLM involvement) checks every proposal against merchant rules. Only the gateway talks to Razorpay. Every action — approved, denied, errored — is logged to an append-only audit ledger.
+- **Merchant Growth Agent** — recovers abandoned carts, proposes upsells/cross-sells (internal, button-triggered or webhook-triggered)
+- **AI Buyer Agent** — shops on behalf of a customer (internal, via dashboard)
+- **MCP Server** — exposes Vyapar as a tool provider so any MCP-capable AI client can transact
+- **External Buyer Demo** — an independent process (zero shared code) that discovers, reasons, and purchases through the protocol surface
 
-**The one-sentence pitch:** "AI agents that grow revenue, bounded by code they can't bypass, with every decision explainable in plain English."
+No agent can touch Razorpay directly. They can only produce structured **Proposals**. A deterministic **Policy Gateway** (zero LLM involvement, 6 checks) evaluates every proposal against merchant rules. Only the gateway talks to Razorpay. Every action — approved, denied, errored — writes exactly one row to an append-only audit ledger.
+
+Human-issued **Mandates** (AP2/UAP/UPI Circle pattern) authorize agents to operate within scoped bounds (amount + category + time). Mandates are instantly revocable.
+
+**The one-sentence pitch:** "Any AI agent can transact with this merchant — bounded by deterministic policy, authorized by human-issued mandates, auditable in plain English."
 
 ---
 
@@ -144,7 +155,8 @@ Neither agent can touch Razorpay. They can only produce structured **Proposals**
 Vyapar/
 ├── package.json                   # Workspace root — defines workspaces + dev scripts
 ├── .env                           # All credentials (not committed)
-├── BUILD_PLAN.md                  # Full design document / step-by-step plan
+├── BUILD_PLAN.md                  # Original design document (Steps 1-10)
+├── BUILD_PLAN2.md                 # Protocol interoperability plan (Steps 1-6)
 ├── README.md                      # Quick-start + demo script
 ├── README_info.md                 # This file — exhaustive documentation
 │
@@ -154,27 +166,33 @@ Vyapar/
 │   │   ├── tsconfig.json          # ESM output, strict mode
 │   │   └── src/
 │   │       ├── env.ts             # dotenv loader (imported FIRST to solve ESM hoisting)
-│   │       ├── index.ts           # Server entry — seeds DB, mounts routes
+│   │       ├── index.ts           # Server entry — seeds DB, mounts routes, MCP + webhook
 │   │       │
 │   │       ├── agents/
 │   │       │   ├── types.ts       # Zod schemas: Proposal, Decision, Outcome, LedgerEntry
 │   │       │   ├── llm-client.ts  # AWS Bedrock Converse API wrapper
 │   │       │   ├── growth-agent.ts# Merchant Growth Agent (cart recovery + upsell)
-│   │       │   └── buyer-agent.ts # AI Buyer Agent (external shopper)
+│   │       │   └── buyer-agent.ts # AI Buyer Agent (internal shopper)
 │   │       │
 │   │       ├── gateway/
 │   │       │   ├── policy-gateway.ts  # Core orchestrator — runs checks, executes, logs
 │   │       │   ├── policy-config.ts   # Read/update policy from SQLite
 │   │       │   └── checks/
-│   │       │       ├── mandate.ts             # Check 1: active mandate exists
+│   │       │       ├── mandate.ts             # Check 1: mandate + scope (amount + category)
 │   │       │       ├── per-transaction-cap.ts # Check 2: amount <= cap
 │   │       │       ├── velocity-cap.ts        # Check 3: daily total + count
 │   │       │       ├── allowlist.ts           # Check 4: category in allowed list
 │   │       │       ├── discount-ceiling.ts    # Check 5: discount % <= ceiling
 │   │       │       └── idempotency.ts         # Check 6: no duplicate in last 60s
 │   │       │
+│   │       ├── mcp-server/
+│   │       │   └── vyapar-mcp-server.ts  # Vyapar as MCP tool provider (external agent entry)
+│   │       │
+│   │       ├── webhooks/
+│   │       │   └── razorpay-webhook.ts   # Signature-verified webhook → auto Growth Agent
+│   │       │
 │   │       ├── razorpay/
-│   │       │   ├── mcp-client.ts  # MCP connection to mcp.razorpay.com
+│   │       │   ├── mcp-client.ts  # MCP connection to mcp.razorpay.com (outgoing)
 │   │       │   └── execution.ts   # executeOnRazorpay() wrapper
 │   │       │
 │   │       ├── ledger/
@@ -186,28 +204,37 @@ Vyapar/
 │   │       │   └── catalog-api.ts # GET /api/catalog routes
 │   │       │
 │   │       ├── db/
-│   │       │   ├── client.ts      # SQLite connection (WAL mode)
+│   │       │   ├── client.ts      # SQLite connection (WAL mode) + migrations
 │   │       │   ├── schema.sql     # 4 tables + 3 indexes
-│   │       │   └── seed.ts        # 15 products + policy + mandates
+│   │       │   └── seed.ts        # 15 products + policy + dev mandates
 │   │       │
 │   │       └── api/
-│   │           └── routes.ts      # All REST endpoints + SSE
+│   │           └── routes.ts      # REST endpoints (policy, mandates, agents, ledger SSE)
 │   │
-│   └── dashboard/
-│       ├── package.json           # @vyapar/dashboard — React + Vite
-│       ├── vite.config.ts         # Proxy /api → localhost:3001
-│       ├── tailwind.config.js     # Tailwind setup
-│       ├── index.html             # SPA entry
+│   ├── dashboard/
+│   │   ├── package.json           # @vyapar/dashboard — React + Vite
+│   │   ├── vite.config.ts         # Proxy /api → localhost:3001
+│   │   ├── tailwind.config.js     # Tailwind setup
+│   │   ├── index.html             # SPA entry
+│   │   └── src/
+│   │       ├── App.tsx            # Layout shell (header, grid, sidebar)
+│   │       ├── main.tsx           # ReactDOM render
+│   │       └── components/
+│   │           ├── RevenueCounter.tsx   # 3 stat cards (recovery, upsell, buyer)
+│   │           ├── LedgerFeed.tsx       # Live-updating audit ledger + source badges
+│   │           ├── DecisionDetail.tsx   # Expandable check-by-check breakdown
+│   │           ├── MandatePanel.tsx     # Issue/Revoke mandates with scope controls
+│   │           ├── AgentAccessPanel.tsx # Protocol surface (MCP, manifest, webhook URLs)
+│   │           ├── PolicyPanel.tsx      # Inline-editable policy controls
+│   │           └── AgentTriggers.tsx    # Buttons/inputs to trigger agents
+│   │
+│   └── external-buyer-demo/
+│       ├── package.json           # Independent package (NO shared imports from server)
 │       └── src/
-│           ├── App.tsx            # Layout shell
-│           ├── main.tsx           # ReactDOM render
-│           └── components/
-│               ├── RevenueCounter.tsx  # 3 stat cards (recovery, upsell, buyer)
-│               ├── LedgerFeed.tsx      # Live-updating audit ledger
-│               ├── DecisionDetail.tsx  # Expandable check-by-check breakdown
-│               ├── PolicyPanel.tsx     # Inline-editable policy controls
-│               └── AgentTriggers.tsx   # Buttons/inputs to trigger agents
+│           ├── index.mjs          # Main agent: discover → connect → browse → reason → buy
+│           └── llm.mjs            # Independent Bedrock LLM client (copy, not import)
 │
+├── test-mcp-client.mjs            # Throwaway MCP client test script (Step 1 verification)
 └── vyapar.db                      # SQLite database (auto-created on first run)
 ```
 
@@ -221,6 +248,9 @@ Vyapar/
 # Razorpay Test Mode API Keys
 RAZORPAY_KEY_ID=rzp_test_...          # Test-mode key ID
 RAZORPAY_KEY_SECRET=...               # Test-mode secret
+
+# Razorpay Webhook Verification
+RAZORPAY_WEBHOOK_SECRET=whsec_...     # HMAC-SHA256 signing key for webhook payloads
 
 # AWS Bedrock (Claude access)
 BEDROCK_API_KEY=ABSK...               # ABSK-prefixed key (used as both accessKeyId AND secretAccessKey)
@@ -507,30 +537,65 @@ WHERE agent_type = ? AND json_extract(proposal_json, '$.action') = ?
 
 ---
 
-## 10. Mandate System
+## 10. Mandate System (AP2/UAP/UPI Circle)
 
 ### What Is a Mandate?
 
-A mandate is a time-boxed authorization that says "this agent is allowed to submit proposals." It's separate from policy checks — a mandate authorizes the agent to operate **at all**, while policy checks validate **what** the agent is trying to do.
+A mandate is a **human-issued, scoped, time-boxed, revocable** authorization that delegates spending authority from a principal (merchant/customer) to an AI agent. This mirrors three real-world protocols:
+
+- **AP2 (Agent Payment Protocol)** — cryptographic proof that a human authorized an agent to spend, within limits
+- **NPCI UAP (Unified Agent Protocol)** — India-specific, built on UPI Circle's delegated-payments feature
+- **UPI Circle** — a primary user delegates a spending-capped mandate to a secondary party
+
+Vyapar implements the *pattern* these protocols standardize (scoped delegation), honestly labeled as a demo simplification (no cryptographic signatures — `consent_method: dashboard_click`).
 
 ### Mandate Fields
 
 | Field | Example | Purpose |
 |-------|---------|---------|
-| id | mandate_growth_001 | Unique identifier |
+| id | mandate_buyer_11d26730 | Unique identifier (serves as mandate_token) |
 | agent_id | growth / buyer | Which agent this authorizes |
 | principal | merchant_default | Who granted the mandate |
 | granted_at | 2026-08-25T09:00:00Z | When authorization was given |
-| expires_at | 2026-08-26T09:00:00Z | When it becomes invalid |
-| revoked | 0 | Can be set to 1 to immediately invalidate |
+| expires_at | 2026-08-25T10:00:00Z | When it becomes invalid (time-boxed) |
+| revoked | 0 / 1 | Can be set to 1 to immediately invalidate |
+| scope_max_amount_paise | 50000 (₹500) | Maximum per-transaction amount this mandate allows |
+| scope_category_json | ["skincare"] | Array of categories this mandate permits |
+| issued_by | merchant_owner | Human-readable string of who issued it |
+| consent_method | dashboard_click | How consent was obtained (honest labeling) |
+
+### Scope Enforcement
+
+The mandate check validates **three things**:
+1. **Existence + validity** — a non-expired, non-revoked mandate exists for this agent
+2. **Amount scope** — `proposal.amount_paise <= mandate.scope_max_amount_paise`
+3. **Category scope** — `proposal.category` is in `mandate.scope_category_json`
+
+Two distinct denial codes:
+- `MANDATE_EXPIRED` — no valid mandate found at all
+- `MANDATE_SCOPE_EXCEEDED` — mandate exists but the proposal exceeds its scope
+
+### Mandate Lifecycle
+
+1. **Issue** — human clicks "Issue Mandate" in the dashboard (sets agent, amount cap, categories, expiry)
+2. **Active** — agent can submit proposals within scope
+3. **Revoke** — human clicks "Revoke" → mandate immediately invalid, next proposal fails
+4. **Expire** — time passes → mandate auto-invalidates
 
 ### Seed Behavior
 
-On every server start, `seed.ts`:
-- Creates mandates if none exist (fresh database)
-- **Refreshes** existing mandates to 24 hours from now (prevents expiry during extended testing)
+On server start, `seed.ts`:
+- Creates two dev-convenience mandates if none exist (fresh database)
+- Does NOT auto-refresh expired mandates — warns the user to issue one via the dashboard
+- This ensures mandates are intentionally issued, not silently maintained
 
-This ensures the demo always works regardless of when the server was last started.
+### API Endpoints
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| GET | `/api/mandates` | List all mandates (with computed `is_active` field) |
+| POST | `/api/mandates` | Issue a new mandate (agent_id, scope, expiry) |
+| POST | `/api/mandates/:id/revoke` | Instantly revoke a mandate |
 
 ---
 
@@ -894,6 +959,41 @@ Context suffixes:
 { "request": "Find me a birthday gift under ₹1,500" }
 ```
 
+### Mandate Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/mandates` | All mandates (active, expired, revoked) |
+| POST | `/mandates` | Issue new mandate (agent_id, scope_max_amount, categories, expires_at) |
+| POST | `/mandates/:id/revoke` | Revoke an active mandate immediately |
+
+**Issue mandate body:**
+```json
+{
+  "agent_id": "buyer",
+  "scope_max_amount_paise": 100000,
+  "scope_categories": ["skincare", "haircare"],
+  "expires_at": "2024-12-31T23:59:59Z"
+}
+```
+
+### Webhook Endpoint
+
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/api/webhooks/razorpay` | Razorpay event receiver (signature-verified) |
+
+Requires `X-Razorpay-Signature` header (HMAC-SHA256 of raw body with `RAZORPAY_WEBHOOK_SECRET`). Handles `payment_link.paid` and `order.paid` events — auto-triggers Growth Agent upsell.
+
+### Protocol & Discovery Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/.well-known/agent-commerce.json` | Discovery manifest (capabilities, policy URL, MCP endpoint) |
+| GET | `/api/policy/public` | Public policy summary (caps, categories — no secrets) |
+| POST | `/mcp` | MCP server endpoint (StreamableHTTP transport) |
+| DELETE | `/mcp` | MCP session teardown |
+
 ### Health Check
 
 | Method | Path | Description |
@@ -907,34 +1007,34 @@ Context suffixes:
 ### Layout (`App.tsx`)
 
 ```
-┌─────────────────────────────────────────────────┐
-│ Vyapar [TEST MODE]                               │
-│ Bounded Agentic Commerce — ...                   │
-├─────────────────────────────────────────────────┤
-│ ┌──────────┐ ┌──────────┐ ┌──────────┐        │
-│ │Cart Recov│ │  Upsell  │ │ AI Buyer │        │
-│ │  ₹1,440  │ │   ₹650   │ │   ₹890   │        │
-│ └──────────┘ └──────────┘ └──────────┘        │
-├─────────────────────┬───────────────────────────┤
-│                     │                           │
-│   Audit Ledger      │   Policy Controls         │
-│   (live-updating)   │   (inline-editable)       │
-│                     │                           │
-│   [green] EXECUTED  │   Per-Txn Cap: ₹[3000]   │
-│   [red]   DENIED    │   Velocity:    ₹[10000]  │
-│   [green] EXECUTED  │   Txn Limit:   [20]      │
-│                     │   Discount:    [15]%      │
-│   (click to expand) │   Mandate:     [60] min   │
-│                     │                           │
-│                     ├───────────────────────────┤
-│                     │   Growth Agent             │
-│                     │   [Cart Recovery]          │
-│                     │   [Upsell]                │
-│                     │                           │
-│                     │   AI Buyer Agent           │
-│                     │   [___input___] [Shop]    │
-│                     │                           │
-└─────────────────────┴───────────────────────────┘
+┌─────────────────────────────────────────────────────────┐
+│ Vyapar [TEST MODE] [MCP]                                 │
+│ Bounded Agentic Commerce on Razorpay                     │
+│ Protocol-interoperable: MCP + .well-known + AP2/UAP      │
+├─────────────────────────────────────────────────────────┤
+│ ┌──────────┐ ┌──────────┐ ┌──────────┐                 │
+│ │Cart Recov│ │  Upsell  │ │ AI Buyer │                 │
+│ │  ₹1,440  │ │   ₹650   │ │   ₹890   │                 │
+│ └──────────┘ └──────────┘ └──────────┘                 │
+├───────────────────────┬─────────────────────────────────┤
+│                       │                                 │
+│   Audit Ledger        │  Mandates (Issue/Revoke/View)   │
+│   (live-updating)     │                                 │
+│                       ├─────────────────────────────────┤
+│   [green] EXECUTED    │  Protocol Surface               │
+│     [MCP EXTERNAL]    │  (MCP Endpoint, Manifest URL,   │
+│   [red]   DENIED      │   Webhook Receiver, Ext Buyer)  │
+│     [INTERNAL]        │                                 │
+│   [green] EXECUTED    ├─────────────────────────────────┤
+│     [WEBHOOK]         │  Policy Controls                │
+│                       │  (inline-editable caps)         │
+│   (click to expand)   │                                 │
+│                       ├─────────────────────────────────┤
+│                       │  Agent Triggers                 │
+│                       │  [Cart Recovery] [Upsell]       │
+│                       │  [___input___] [Shop]           │
+│                       │                                 │
+└───────────────────────┴─────────────────────────────────┘
 ```
 
 ### Component Details
@@ -953,7 +1053,12 @@ Polls `/api/ledger?limit=1000` every 5 seconds.
 - Connects to `/api/ledger/stream` via SSE
 - Falls back to polling if SSE fails
 - Color-coded entries: green (executed), red (denied), yellow (error)
-- Each entry shows: status badge, agent type badge, **SIMULATED** badge, timestamp, explanation, amount
+- Each entry shows: status badge, agent type badge, **source badge**, timestamp, explanation, amount
+- Dynamic source badge via `getTriggerBadge()`:
+  - **WEBHOOK** (purple) — triggered by Razorpay payment event
+  - **MCP EXTERNAL** (cyan) — external agent via MCP protocol
+  - **INTERNAL** (blue) — internal buyer agent
+  - **SIMULATED** (amber) — dashboard button click
 - Click to expand → shows `DecisionDetail`
 - Max height with scroll (600px)
 
@@ -963,7 +1068,24 @@ Expanded view for a ledger entry showing:
 - **Proposal section** — grid of: action, amount, category, agent type, reasoning
 - **Policy Gateway Checks** — vertical pipeline with colored circles (green check / red X), labels, PASS/FAIL badges, detail text
 - **Decision section** — colored card (green/red) with verdict, reason code, reason text
-- **Footer** — entry ID + TEST MODE badge
+- **Footer** — entry ID + triggered_by badge + TEST MODE badge
+
+#### `MandatePanel.tsx`
+
+Mandate lifecycle management:
+- **Issue Mandate form** — select agent_id, set scope_max_amount, choose categories (multi-select), set expiry duration
+- **Active mandates** — listed with ACTIVE badge, scope summary, Revoke button
+- **History** — collapsible section showing expired/revoked mandates with status badges
+- Calls: `GET /api/mandates`, `POST /api/mandates`, `POST /api/mandates/:id/revoke`
+
+#### `AgentAccessPanel.tsx` (Protocol Surface)
+
+Shows 4 copy-pasteable protocol entry points:
+- **MCP Endpoint** (indigo) — `http://host:3001/mcp`
+- **Discovery Manifest** (gray) — `http://host:3001/.well-known/agent-commerce.json`
+- **Webhook Receiver** (purple) — `http://host:3001/api/webhooks/razorpay`
+- **External Buyer Command** (emerald) — `npm run external-buyer`
+- Each has a Copy button with "Copied!" confirmation
 
 #### `PolicyPanel.tsx`
 
@@ -1121,6 +1243,7 @@ Zod validates LLM output at runtime. An LLM might return malformed JSON or viola
   discount_pct: z.number().min(0).max(100).optional(),
   original_order_id: z.string().optional(),
   item_ids: z.array(z.string()).optional(),
+  triggered_by: z.enum(['simulated_button', 'webhook', 'mcp_external', 'internal']).optional(),
 }
 ```
 
@@ -1129,6 +1252,7 @@ Key validations:
 - `action` is constrained to exactly 3 possible values
 - `agent_type` can only be 'growth' or 'buyer'
 - `discount_pct` is bounded 0-100
+- `triggered_by` tracks proposal origin — used for dashboard badges and audit trail
 
 #### `PolicyCheckResultSchema`
 
@@ -1358,17 +1482,22 @@ The user's API key is an ABSK (Bedrock) key. Bedrock provides:
 | Seeded scenarios (not real cart abandonment events) | Hackathon demo — clearly labeled as SIMULATED |
 | No user authentication | Demo runs locally; no multi-tenant needed |
 | No retry logic for Razorpay failures | Test mode rarely fails; errors are logged regardless |
-| Mandate refresh on every server start | Ensures demo always works without manual intervention |
 | Category allowlist not editable from dashboard | All 5 categories are allowed; restriction would need UI for array editing |
 | SSE polls every 2s (not true push) | Acceptable latency for demo; true push would need DB triggers or pub/sub |
 | No production mode switch | Intentionally demo-only — see Section 22 |
 | Agent doesn't learn from denials | Stateless per-invocation; no memory between calls |
 | Single merchant ("default") | Multi-tenancy is out of scope for hackathon |
 | TypeScript strict mode type errors in AWS SDK types | Existing upstream type incompatibilities in Bedrock SDK; doesn't affect runtime |
+| Mandates are not cryptographically signed | `consent_method: dashboard_click` — production would need AP2-style proof-of-authorization |
+| .well-known manifest is convention-compliant, not certified | No UCP certification exists yet; honest label in manifest |
+| External buyer shares AWS Bedrock credentials (env var) | Independent process, but same AWS account; real multi-party would use separate billing |
+| MCP server is stateful (session-based) | Matches MCP spec for StreamableHTTP; no horizontal scaling without session store |
 
 ---
 
 ## Summary of What Was Built
+
+### BUILD_PLAN.md (Core System)
 
 | Step | What | Status |
 |------|------|--------|
@@ -1383,4 +1512,229 @@ The user's API key is an ABSK (Bedrock) key. Bedrock provides:
 | 9 | Dashboard polish (3 stat cards, full editable policy, improved checks UI, badges) | Done |
 | 10 | README + demo script | Done |
 
-**Total: 10/10 steps complete. Project is demo-ready.**
+### BUILD_PLAN2.md (Protocol Interoperability)
+
+| Step | What | Status |
+|------|------|--------|
+| 1 | MCP server (Vyapar as tool provider for external agents) | Done |
+| 2 | Discovery manifest (.well-known/agent-commerce.json + public policy) | Done |
+| 3 | Mandate scope enforcement (amount + category in AP2/UAP style) | Done |
+| 4 | Razorpay webhook receiver (signature-verified, auto-triggers Growth Agent) | Done |
+| 5 | External buyer agent (independent package, discovers via protocol surface) | Done |
+| 6 | Dashboard + narrative polish (badges, protocol surface panel, demo script) | Done |
+
+**Total: 16/16 steps complete across both plans. Project is demo-ready.**
+
+---
+
+## 26. MCP Server — Vyapar as Tool Provider
+
+### File: `packages/server/src/mcp-server/vyapar-mcp-server.ts`
+
+### Purpose
+
+Exposes Vyapar as an MCP-compatible tool provider so that any external AI agent (Claude Desktop, Claude Code, custom bots) can discover and transact with this merchant through the standard Model Context Protocol.
+
+### Transport
+
+Uses `StreamableHTTPServerTransport` (stateful, session-based). Each connecting client gets a unique session. The server is mounted at `POST /mcp` and `DELETE /mcp` (session teardown).
+
+### Tools Exposed
+
+| Tool Name | Description | Parameters |
+|-----------|-------------|------------|
+| `browse_catalog` | Browse merchant product catalog | `category` (optional filter) |
+| `get_policy` | Read current merchant policy (caps, limits, categories) | none |
+| `submit_purchase` | Submit a purchase proposal through the policy gateway | `item_id`, `quantity`, `mandate_token`, `reasoning` |
+
+### Architecture Constraint
+
+The MCP server does NOT call Razorpay or bypass any check. `submit_purchase` constructs a Proposal object (with `triggered_by: 'mcp_external'`) and passes it to `processProposal()` — the same gateway used by internal agents.
+
+### Session Management
+
+```typescript
+const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: () => randomUUID() });
+const server = new McpServer({ name: 'vyapar-merchant', version: '1.0.0' });
+server.connect(transport);
+```
+
+The session map is cleaned up on `DELETE /mcp` or when the transport's `onclose` fires.
+
+---
+
+## 27. Discovery Manifest
+
+### File served: `GET /.well-known/agent-commerce.json`
+
+### Purpose
+
+A static JSON document that tells any crawling agent: "this merchant exists, here are its capabilities, here's how to connect." Follows the emerging UCP (Unified Commerce Protocol) convention for agent-to-merchant discovery.
+
+### Manifest Contents
+
+```json
+{
+  "schema_version": "0.1.0",
+  "merchant": {
+    "name": "Vyapar Demo Store",
+    "description": "Bounded agentic commerce — skincare, haircare, wellness",
+    "categories": ["skincare", "haircare", "wellness", "fragrance", "makeup"]
+  },
+  "capabilities": {
+    "mcp_endpoint": "http://localhost:3001/mcp",
+    "supported_actions": ["browse_catalog", "submit_purchase"],
+    "policy_url": "http://localhost:3001/api/policy/public",
+    "mandate_required": true,
+    "test_mode": true
+  },
+  "protocol": {
+    "transport": "StreamableHTTP",
+    "auth": "mandate_token"
+  }
+}
+```
+
+### Public Policy Endpoint: `GET /api/policy/public`
+
+Returns the merchant's policy configuration without any secrets — caps, velocity limits, allowed categories. External agents read this to understand what proposals will be accepted before submitting.
+
+### Honesty Note
+
+The manifest is convention-compliant but not certified. No official UCP registry exists yet. The `schema_version: "0.1.0"` and `test_mode: true` fields are honest labels.
+
+---
+
+## 28. Webhook Receiver
+
+### File: `packages/server/src/webhooks/razorpay-webhook.ts`
+
+### Purpose
+
+Receives Razorpay payment events (e.g., `payment_link.paid`, `order.paid`) and auto-triggers the Growth Agent to run an upsell — no human click needed. This proves the system can react to real-world events, not just button presses.
+
+### Signature Verification
+
+Every incoming request is verified using HMAC-SHA256:
+
+```typescript
+function verifySignature(body: string, signature: string, secret: string): boolean {
+  const expected = crypto.createHmac('sha256', secret).update(body).digest('hex');
+  const sigBuf = Buffer.from(signature, 'hex');
+  const expectedBuf = Buffer.from(expected, 'hex');
+  if (sigBuf.length !== expectedBuf.length) return false;
+  return crypto.timingSafeEqual(sigBuf, expectedBuf);
+}
+```
+
+Key details:
+- Uses `crypto.timingSafeEqual` for constant-time comparison (prevents timing attacks)
+- Requires raw body (captured via `express.json({ verify: ... })` middleware)
+- Rejects requests with missing/invalid `X-Razorpay-Signature` header (HTTP 401)
+
+### Event Handling
+
+On successful verification:
+1. Extracts payment amount and metadata from the event payload
+2. Constructs a Growth Agent scenario with `triggered_by: 'webhook'`
+3. Calls `runGrowthAgent(scenario)` which creates a Proposal → processProposal()
+4. Returns HTTP 200 to Razorpay (acknowledgment)
+
+### Registration in Express
+
+```typescript
+// index.ts
+app.use(express.json({
+  verify: (req: any, _res, buf) => { req.rawBody = buf.toString(); },
+}));
+app.use('/api', webhookRouter);
+```
+
+The raw body must be captured before JSON parsing destroys it — otherwise signature verification fails.
+
+---
+
+## 29. External Buyer Agent
+
+### Directory: `packages/external-buyer-demo/`
+
+### Purpose
+
+An independent AI buyer that discovers, connects to, and transacts with the Vyapar merchant **through the protocol surface only** — proving true agent-to-agent commerce. Shares zero code with the server package.
+
+### Architecture
+
+```
+External Buyer (separate process)
+       │
+       ├── 1. GET /.well-known/agent-commerce.json   → discovers merchant
+       ├── 2. GET /api/policy/public                 → reads policy constraints
+       ├── 3. GET /api/mandates                      → auto-discovers active mandate
+       ├── 4. Connect to /mcp (StreamableHTTP)       → establishes MCP session
+       ├── 5. Call browse_catalog tool                → sees available products
+       ├── 6. LLM reasoning (Bedrock Claude Sonnet)  → picks best item for goal
+       └── 7. Call submit_purchase tool              → proposal enters gateway
+```
+
+### Key Design Decisions
+
+- **Independent LLM client** (`src/llm.mjs`) — copy of the Bedrock integration, not an import. Proves zero coupling.
+- **Auto-discovery of mandates** — if `MANDATE_TOKEN` env var is not set, the agent calls `GET /api/mandates` and finds the first active buyer mandate.
+- **Tool-use loop** — the LLM decides which MCP tools to call and in what order, based on the user's shopping goal.
+- **No hardcoded URLs** — the merchant endpoint comes from `.well-known`, not a config constant.
+
+### Usage
+
+```bash
+# With explicit mandate token:
+MANDATE_TOKEN=xxx npm run external-buyer -- "Buy me a birthday gift under 1000 rupees"
+
+# Auto-discover mandate (dev mode):
+npm run external-buyer -- "Find me a moisturizer under 700 rupees"
+```
+
+### What the Demo Proves
+
+1. **Discoverability** — the agent finds the merchant via `.well-known`
+2. **Protocol compliance** — connects via standard MCP, not a custom API
+3. **Bounded** — the same 6 policy checks (including mandate scope) apply
+4. **Independent** — different process, different LLM instance, different package.json
+5. **Auditable** — the proposal lands in the same ledger with `triggered_by: 'mcp_external'`
+
+---
+
+## 30. Protocol Interoperability Summary
+
+### The Four Entry Points
+
+| Entry Point | Source | triggered_by | How It Reaches Gateway |
+|-------------|--------|--------------|----------------------|
+| Dashboard button | Human clicks "Cart Recovery" or "Upsell" | `simulated_button` | routes.ts → runGrowthAgent() → processProposal() |
+| Internal Buyer Agent | Dashboard input field | `internal` | routes.ts → runBuyerAgent() → processProposal() |
+| MCP External Agent | Any MCP-capable AI client | `mcp_external` | vyapar-mcp-server.ts → processProposal() |
+| Razorpay Webhook | payment_link.paid / order.paid event | `webhook` | razorpay-webhook.ts → runGrowthAgent() → processProposal() |
+
+### Invariant
+
+All four paths converge on `processProposal()` in `policy-gateway.ts`. The gateway is the **only** code path that calls Razorpay. No entry point bypasses any check.
+
+### What Makes This "Protocol-Interoperable"
+
+1. **Discovery** — `.well-known/agent-commerce.json` tells any agent where to connect
+2. **Standard transport** — MCP over StreamableHTTP (not a custom REST API)
+3. **Public policy** — agents can pre-check their proposals against published caps
+4. **Mandate-based auth** — a scoped token (not an API key) delegates bounded authority
+5. **Event-driven** — webhooks trigger autonomous agent behavior from real Razorpay events
+
+### The AP2/UAP Analogy
+
+| UAP Concept | Vyapar Implementation |
+|-------------|----------------------|
+| Principal (human) | Merchant issuing mandate from dashboard |
+| Agent (AI) | Buyer agent or external MCP client |
+| Delegation | Mandate with scope (amount, categories, expiry) |
+| Revocation | `POST /api/mandates/:id/revoke` — instant, absolute |
+| Scope enforcement | Gateway check 1: amount ≤ scope_max AND category ∈ scope_categories |
+| Audit | Append-only ledger with triggered_by provenance |
+
+This is not a UAP implementation (UAP is not live). It implements the **pattern** UAP is standardizing — honestly labeled as such.

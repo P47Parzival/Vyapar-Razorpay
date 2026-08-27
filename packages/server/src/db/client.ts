@@ -28,4 +28,10 @@ if (!colNames.includes('scope_max_amount_paise')) {
   db.exec("ALTER TABLE mandates ADD COLUMN consent_method TEXT NOT NULL DEFAULT 'auto_seed'");
 }
 
+const policyCols = db.prepare("PRAGMA table_info(policy_config)").all() as { name: string }[];
+const policyColNames = policyCols.map(c => c.name);
+if (!policyColNames.includes('agent_commerce_enabled')) {
+  db.exec("ALTER TABLE policy_config ADD COLUMN agent_commerce_enabled INTEGER NOT NULL DEFAULT 1");
+}
+
 export default db;

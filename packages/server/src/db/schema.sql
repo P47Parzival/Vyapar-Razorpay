@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS policy_config (
   mandate_expiry_minutes INTEGER NOT NULL DEFAULT 60,
   merchant_allowlist_json TEXT NOT NULL DEFAULT '[]',
   category_allowlist_json TEXT NOT NULL DEFAULT '["skincare","haircare","bodycare","wellness","accessories"]',
+  agent_commerce_enabled INTEGER NOT NULL DEFAULT 1,
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -49,6 +50,29 @@ CREATE TABLE IF NOT EXISTS ledger (
   category TEXT DEFAULT NULL
 );
 
+CREATE TABLE IF NOT EXISTS customers (
+  id TEXT PRIMARY KEY,
+  identifier TEXT NOT NULL,
+  first_seen_at TEXT NOT NULL DEFAULT (datetime('now')),
+  last_purchase_at TEXT NOT NULL DEFAULT (datetime('now')),
+  total_spent_paise INTEGER NOT NULL DEFAULT 0,
+  order_count INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS orders (
+  id TEXT PRIMARY KEY,
+  customer_id TEXT NOT NULL REFERENCES customers(id),
+  ledger_id TEXT NOT NULL REFERENCES ledger(id),
+  item_ids_json TEXT NOT NULL DEFAULT '[]',
+  amount_paise INTEGER NOT NULL,
+  category TEXT,
+  source TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 CREATE INDEX IF NOT EXISTS idx_ledger_timestamp ON ledger(timestamp DESC);
 CREATE INDEX IF NOT EXISTS idx_ledger_agent_type ON ledger(agent_type);
 CREATE INDEX IF NOT EXISTS idx_ledger_final_status ON ledger(final_status);
+CREATE INDEX IF NOT EXISTS idx_orders_customer_id ON orders(customer_id);
+CREATE INDEX IF NOT EXISTS idx_orders_source ON orders(source);
+CREATE INDEX IF NOT EXISTS idx_customers_identifier ON customers(identifier);

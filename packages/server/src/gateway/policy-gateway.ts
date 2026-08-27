@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import type { Proposal, Decision, PolicyCheckResult, Outcome } from '../agents/types.js';
 import { getPolicyConfig } from './policy-config.js';
 import { checkMandate } from './checks/mandate.js';
@@ -9,6 +10,7 @@ import { checkIdempotency } from './checks/idempotency.js';
 import { executeOnRazorpay } from '../razorpay/execution.js';
 import { writeLedgerEntry } from '../ledger/ledger.js';
 import type { LedgerRow } from '../ledger/ledger.js';
+import db from '../db/client.js';
 
 interface GatewayResult {
   decision: Decision;
@@ -34,6 +36,29 @@ function getReasonCode(check: PolicyCheckResult): string {
 
 export async function processProposal(proposal: Proposal): Promise<GatewayResult> {
   const policy = getPolicyConfig(proposal.merchant_id);
+
+  // Pre-check: is agent commerce enabled for this merchant?
+  if (!policy.agent_commerce_enabled) {
+    const now = new Date().toISOString();
+    const decision: Decision = {
+      proposal_id: proposal.proposal_id,
+      verdict: 'denied',
+      reason_code: 'MERCHANT_NOT_OPTED_IN',
+      reason_text: 'Agent commerce is disabled for this merchant. Enable it in the merchant settings.',
+      checks: [],
+      checked_at: now,
+    };
+    const outcome: Outcome = {
+      proposal_id: proposal.proposal_id,
+      razorpay_action: null,
+      razorpay_response: null,
+      final_status: 'denied',
+      executed_at: now,
+    };
+    const ledgerRow = writeLedgerEntry(proposal, [], decision, outcome);
+    return { decision, outcome, ledgerRow };
+  }
+
   const checks: PolicyCheckResult[] = [];
 
   // Run checks in order, stop at first failure
@@ -117,7 +142,62 @@ export async function processProposal(proposal: Proposal): Promise<GatewayResult
   }
 
   const ledgerRow = writeLedgerEntry(proposal, checks, decision, outcome);
+
+  if (outcome.final_status === 'executed') {
+    try {
+      recordOrderAndCustomer(proposal, ledgerRow.id);
+    } catch (err) {
+      console.error('[Gateway] CRITICAL: Ledger row written but order/customer write failed:', err);
+    }
+  }
+
   return { decision, outcome, ledgerRow };
+}
+
+function getSourceFromProposal(proposal: Proposal): string {
+  const tb = (proposal as any).triggered_by;
+  if (tb === 'webhook') return 'webhook';
+  if (tb === 'mcp_external') return 'external_mcp_client';
+  if (tb === 'internal') return 'internal_buyer_agent';
+  if (proposal.agent_type === 'growth') return 'internal_growth_agent';
+  return 'internal_buyer_agent';
+}
+
+function recordOrderAndCustomer(proposal: Proposal, ledgerId: string): void {
+  const now = new Date().toISOString();
+  const identifier = proposal.counterparty || `anon_${randomUUID().slice(0, 8)}`;
+  const source = getSourceFromProposal(proposal);
+
+  const existingCustomer = db.prepare(
+    'SELECT id FROM customers WHERE identifier = ?'
+  ).get(identifier) as { id: string } | undefined;
+
+  let customerId: string;
+
+  if (existingCustomer) {
+    customerId = existingCustomer.id;
+    db.prepare(
+      `UPDATE customers SET
+        last_purchase_at = ?,
+        total_spent_paise = total_spent_paise + ?,
+        order_count = order_count + 1
+      WHERE id = ?`
+    ).run(now, proposal.amount_paise, customerId);
+  } else {
+    customerId = `cust_${randomUUID().slice(0, 12)}`;
+    db.prepare(
+      `INSERT INTO customers (id, identifier, first_seen_at, last_purchase_at, total_spent_paise, order_count)
+       VALUES (?, ?, ?, ?, ?, 1)`
+    ).run(customerId, identifier, now, now, proposal.amount_paise);
+  }
+
+  const orderId = `order_${randomUUID().slice(0, 12)}`;
+  const itemIds = (proposal as any).item_ids || [];
+
+  db.prepare(
+    `INSERT INTO orders (id, customer_id, ledger_id, item_ids_json, amount_paise, category, source, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(orderId, customerId, ledgerId, JSON.stringify(itemIds), proposal.amount_paise, proposal.category, source, now);
 }
 
 function buildRazorpayParams(proposal: Proposal): Record<string, unknown> {
