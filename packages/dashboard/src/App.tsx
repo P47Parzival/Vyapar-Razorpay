@@ -12,7 +12,7 @@ function App() {
     <div className="max-w-7xl mx-auto px-4 py-8">
       <header className="mb-8">
         <div className="flex items-center gap-3">
-          <h1 className="text-3xl font-bold text-gray-900">Vyapar</h1>
+          <h1 className="text-3xl font-bold text-gray-900">Razorpay Agentic Commerce Layer</h1>
           <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200 font-medium">
             TEST MODE
           </span>
@@ -21,10 +21,10 @@ function App() {
           </span>
         </div>
         <p className="text-gray-600 mt-1">
-          Bounded Agentic Commerce on Razorpay — any AI agent can transact with this merchant, gated by deterministic policy
+          Merchant: <span className="font-semibold">Vyapar</span> (Demo Tenant) — any AI agent can discover and transact, gated by deterministic policy
         </p>
         <p className="text-xs text-gray-400 mt-1">
-          Protocol-interoperable: MCP server + .well-known discovery + AP2/UAP-style mandates + webhook triggers
+          Platform capability: zero-code onboarding, MCP + .well-known discovery, AP2/UAP mandates, webhook triggers, merchant-owned data
         </p>
       </header>
 

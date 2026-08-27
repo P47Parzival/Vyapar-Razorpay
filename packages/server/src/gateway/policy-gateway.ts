@@ -1,3 +1,8 @@
+// Multi-tenancy: merchant_id is threaded through every check via proposal.merchant_id → getPolicyConfig(merchantId).
+// This demo runs a single tenant ('default') for clarity, but every check function is parameterized by merchant_id,
+// not hardcoded. In a real deployment, one platform instance serves many merchants, each with their own policy,
+// mandates, catalog, orders, and customers — the same way GoKwik serves hundreds of D2C brands from one layer.
+
 import { randomUUID } from 'node:crypto';
 import type { Proposal, Decision, PolicyCheckResult, Outcome } from '../agents/types.js';
 import { getPolicyConfig } from './policy-config.js';

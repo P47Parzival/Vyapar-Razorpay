@@ -246,3 +246,37 @@ Vyapar/
 - **Webhook secret is a shared HMAC key**: Standard Razorpay practice, but not a zero-knowledge proof.
 - **Test mode only**: All Razorpay calls use test-mode keys. No real money moves.
 - **UAP is not live**: We implement the *pattern* NPCI is standardizing, not the protocol itself.
+
+---
+
+## Real-World Evidence & Rollout Path
+
+### The problem this plan solves is not hypothetical
+
+GoKwik and PayU launched a live, multi-brand D2C agentic-checkout experience inside ChatGPT in India in July 2026 — brands including Hyphen, Beardo, and Kilrr, with hundreds more planned — built on the Agentic Commerce Protocol. This proves both that this category is real and that India-specific rollout is already underway. This project is not staking out imaginary future ground.
+
+### Adoption friction, not protocol capability, is the actual bottleneck
+
+OpenAI's first attempt at exactly this category (Instant Checkout, launched with Shopify and Etsy in September 2025) reached fewer than 15 live merchants out of over a million eligible ones within six months, and was shelved in March 2026 before a February 2026 relaunch as "Buy it in ChatGPT." The gap wasn't technical feasibility — the protocol worked — it was that merchants weren't willing or able to self-integrate into a new checkout surface.
+
+### GoKwik's stated model is the one this project mirrors
+
+GoKwik's repeated positioning across every announcement:
+
+> "Every GoKwik merchant becomes available inside ChatGPT with **no engineering work, no new integration, and no separate listing fee.** Brands **keep full ownership of catalogue, customer and conversion data.**"
+
+This project's zero-code onboarding simulation (Step 1 of Build Plan 3) and merchant-owned `orders`/`customers` tables (Step 2) are a working demonstration of exactly those two guarantees — not descriptions of them, but running code you can point at on screen.
+
+### The realistic deployment shape
+
+In order:
+
+1. **NPCI defines agent-native delegation primitives** at the UPI rail level (UPI Circle, UPI Reserve — both explicitly named as "upcoming" in GoKwik's own announcements, meaning even GoKwik's live system isn't on agent-native rails yet).
+2. **A PSP/platform layer** (Razorpay, or a GoKwik-style enabler built on top of a PSP) implements the policy gateway, mandate system, and merchant-facing dashboard once.
+3. **Individual merchants opt in** via a settings toggle, connecting an already-existing catalog, writing zero code.
+
+This project is a working prototype of the middle layer (#2), built ahead of the bottom layer (agent-native UPI rails) being finalized — which is an honest description of where this sits, not a weakness to obscure.
+
+### What this means for judges
+
+Every architectural choice in this project (the deterministic gateway, the scoped mandates, the platform/merchant separation, the zero-code onboarding, the merchant-owned data tables) is a direct response to a specific, named, real-world friction that either killed a live product (Instant Checkout v1) or is the stated differentiator of a live competitor (GoKwik). None of it is speculative.

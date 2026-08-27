@@ -41,7 +41,8 @@ app.get('/.well-known/agent-commerce.json', (_req, res) => {
   const host = _req.headers.host || `localhost:${PORT}`;
   const baseUrl = `http://${host}`;
   res.json({
-    protocol_note: 'Vyapar publishes this manifest in the spirit of emerging agent-commerce discovery conventions (UCP/.well-known pattern). This is not a certified UCP implementation.',
+    protocol_note: 'This manifest follows emerging agent-commerce discovery conventions (UCP/.well-known pattern). Not a certified UCP implementation.',
+    platform_provider: 'Razorpay Agentic Commerce Layer (demo)',
     merchant: { name: 'Vyapar', id: 'default', mode: 'test' },
     catalog_feed: `${baseUrl}/api/catalog`,
     mcp_endpoint: `${baseUrl}/mcp`,
