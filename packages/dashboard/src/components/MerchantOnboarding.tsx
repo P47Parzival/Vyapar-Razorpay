@@ -1,17 +1,32 @@
 import { useState, useEffect } from 'react';
 
+interface ShopifyConnection {
+  id: string;
+  shop_domain: string;
+  connected_at: string;
+  last_synced_at: string | null;
+  product_count: number;
+  status: string;
+}
+
 interface OnboardingStatus {
   catalog_connected: boolean;
   catalog_item_count: number;
+  shopify_item_count: number;
   agent_commerce_enabled: boolean;
+  connections: ShopifyConnection[];
 }
 
 export default function MerchantOnboarding() {
   const [status, setStatus] = useState<OnboardingStatus | null>(null);
-  const [source, setSource] = useState('shopify');
+  const [source, setSource] = useState('shopify_real');
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState<string | null>(null);
   const [toggling, setToggling] = useState(false);
+  const [shopDomain, setShopDomain] = useState('');
+  const [clientId, setClientId] = useState('');
+  const [clientSecret, setClientSecret] = useState('');
+  const [shopError, setShopError] = useState<string | null>(null);
 
   const fetchStatus = async () => {
     const res = await fetch('/api/onboarding/status');
@@ -21,20 +36,57 @@ export default function MerchantOnboarding() {
 
   useEffect(() => { fetchStatus(); }, []);
 
-  const handleImport = async () => {
+  const handleSimulatedImport = async () => {
     setImporting(true);
     setImportResult(null);
     try {
       const res = await fetch('/api/onboarding/import-catalog', { method: 'POST' });
       const data = await res.json();
       if (data.was_already_connected) {
-        setImportResult(`Catalog already connected (${data.items_imported} items)`);
+        setImportResult(`Demo catalog already loaded (${data.items_imported} items)`);
       } else {
-        setImportResult(`Imported ${data.items_imported} items from ${source === 'shopify' ? 'Shopify' : source === 'woocommerce' ? 'WooCommerce' : 'CSV'}`);
+        setImportResult(`Imported ${data.items_imported} demo items`);
       }
       fetchStatus();
     } catch {
       setImportResult('Import failed');
+    }
+    setImporting(false);
+  };
+
+  const handleShopifyConnect = async () => {
+    setImporting(true);
+    setShopError(null);
+    setImportResult(null);
+    try {
+      if (!shopDomain.endsWith('.myshopify.com')) {
+        setShopError('Domain must end in .myshopify.com');
+        setImporting(false);
+        return;
+      }
+      if (!clientId.trim() || !clientSecret.trim()) {
+        setShopError('Both Client ID and Client Secret are required');
+        setImporting(false);
+        return;
+      }
+
+      const res = await fetch('/api/onboarding/connect-shopify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ shop_domain: shopDomain, client_id: clientId, client_secret: clientSecret }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setImportResult(`Connected "${data.shop_name}" — ${data.products_imported} products imported`);
+        setShopDomain('');
+        setClientId('');
+        setClientSecret('');
+        fetchStatus();
+      } else {
+        setShopError(data.error || 'Connection failed');
+      }
+    } catch {
+      setShopError('Connection failed — check domain and credentials');
     }
     setImporting(false);
   };
@@ -56,6 +108,8 @@ export default function MerchantOnboarding() {
 
   if (!status) return null;
 
+  const hasShopifyConnection = status.connections.length > 0;
+
   return (
     <div className="bg-white rounded-lg shadow border border-gray-200">
       <div className="px-4 py-3 border-b border-gray-200">
@@ -76,32 +130,92 @@ export default function MerchantOnboarding() {
                 {status.catalog_item_count} ITEMS
               </span>
             )}
+            {status.shopify_item_count > 0 && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 font-medium">
+                {status.shopify_item_count} LIVE SHOPIFY
+              </span>
+            )}
           </div>
 
-          {!status.catalog_connected ? (
-            <div className="space-y-2 ml-7">
-              <select
-                value={source}
-                onChange={e => setSource(e.target.value)}
-                className="w-full text-sm border border-gray-300 rounded px-2 py-1.5 bg-white"
-              >
-                <option value="shopify">Shopify</option>
-                <option value="woocommerce">WooCommerce</option>
-                <option value="csv">Custom CSV Upload</option>
-              </select>
+          {/* Active Shopify Connections */}
+          {hasShopifyConnection && (
+            <div className="ml-7 mb-2 space-y-1.5">
+              {status.connections.map(conn => (
+                <div key={conn.id} className="p-2 bg-emerald-50 border border-emerald-200 rounded text-xs">
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium text-emerald-900">{conn.shop_domain}</span>
+                    <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${conn.status === 'active' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
+                      {conn.status.toUpperCase()}
+                    </span>
+                  </div>
+                  <div className="text-emerald-600 mt-0.5">
+                    {conn.product_count} products | Last synced: {conn.last_synced_at ? new Date(conn.last_synced_at).toLocaleString() : 'never'}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Connect form */}
+          <div className="space-y-2 ml-7">
+            <select
+              value={source}
+              onChange={e => setSource(e.target.value)}
+              className="w-full text-sm border border-gray-300 rounded px-2 py-1.5 bg-white"
+            >
+              <option value="shopify_real">Connect a real Shopify store (pilot)</option>
+              <option value="simulated">Simulated demo catalog</option>
+            </select>
+
+            {source === 'shopify_real' && (
+              <div className="space-y-2">
+                <div className="p-2 bg-blue-50 border border-blue-200 rounded text-[10px] text-blue-800 leading-relaxed">
+                  In your Shopify Dev Dashboard: Create app &rarr; grant <code className="bg-blue-100 px-0.5">read_products</code> scope &rarr; Install on store &rarr; copy Client ID and Client Secret. We exchange them for a temporary access token automatically.
+                </div>
+                <input
+                  type="text"
+                  value={shopDomain}
+                  onChange={e => setShopDomain(e.target.value)}
+                  placeholder="yourstore.myshopify.com"
+                  className="w-full text-sm border border-gray-300 rounded px-2 py-1.5"
+                />
+                <input
+                  type="text"
+                  value={clientId}
+                  onChange={e => setClientId(e.target.value)}
+                  placeholder="Client ID"
+                  className="w-full text-sm border border-gray-300 rounded px-2 py-1.5"
+                />
+                <input
+                  type="password"
+                  value={clientSecret}
+                  onChange={e => setClientSecret(e.target.value)}
+                  placeholder="Client Secret (shpss_...)"
+                  className="w-full text-sm border border-gray-300 rounded px-2 py-1.5"
+                />
+                {shopError && (
+                  <p className="text-xs text-red-600 font-medium">{shopError}</p>
+                )}
+                <button
+                  onClick={handleShopifyConnect}
+                  disabled={importing}
+                  className="w-full px-3 py-1.5 text-sm bg-emerald-600 text-white rounded hover:bg-emerald-700 disabled:opacity-50 transition-colors"
+                >
+                  {importing ? 'Connecting...' : 'Connect Shopify Store'}
+                </button>
+              </div>
+            )}
+
+            {source === 'simulated' && (
               <button
-                onClick={handleImport}
+                onClick={handleSimulatedImport}
                 disabled={importing}
                 className="w-full px-3 py-1.5 text-sm bg-indigo-600 text-white rounded hover:bg-indigo-700 disabled:opacity-50 transition-colors"
               >
-                {importing ? 'Connecting...' : `Connect ${source === 'shopify' ? 'Shopify' : source === 'woocommerce' ? 'WooCommerce' : 'CSV'}`}
+                {importing ? 'Importing...' : 'Load Demo Catalog (simulated)'}
               </button>
-            </div>
-          ) : (
-            <p className="text-xs text-green-700 ml-7">
-              Catalog synced — {status.catalog_item_count} products across all categories
-            </p>
-          )}
+            )}
+          </div>
 
           {importResult && (
             <p className="text-xs text-indigo-600 mt-1.5 ml-7 font-medium">{importResult}</p>
@@ -134,9 +248,17 @@ export default function MerchantOnboarding() {
           </div>
         </div>
 
-        {/* Simulation notice */}
+        {/* Footer note */}
         <div className="text-[10px] text-gray-400 leading-relaxed border-t border-gray-100 pt-3">
-          <span className="font-medium text-gray-500">Simulated for demo</span> — a production version would use the platform's existing Shopify/WooCommerce app OAuth flow, the same pattern GoKwik and other commerce-enablement platforms already use. Zero custom code on the merchant side.
+          {hasShopifyConnection ? (
+            <>
+              <span className="font-medium text-emerald-600">Live Shopify catalog connected.</span> Product data is real and synced from the merchant's store. Checkout uses Razorpay test mode — no real funds are transferred.
+            </>
+          ) : (
+            <>
+              <span className="font-medium text-gray-500">Simulated catalog</span> — to connect a real store, select "Connect a real Shopify store" above. A production version uses the platform's existing Shopify app OAuth flow.
+            </>
+          )}
         </div>
       </div>
     </div>

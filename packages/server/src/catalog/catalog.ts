@@ -9,6 +9,8 @@ export interface CatalogItem {
   stock: number;
   pairs_with_ids: string[];
   is_active: boolean;
+  source_connection_id: string | null;
+  shopify_product_id: string | null;
 }
 
 interface CatalogRow {
@@ -20,6 +22,8 @@ interface CatalogRow {
   stock: number;
   pairs_with_ids: string;
   is_active: number;
+  source_connection_id: string | null;
+  shopify_product_id: string | null;
 }
 
 export function getAllCatalogItems(): CatalogItem[] {

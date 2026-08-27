@@ -22,6 +22,7 @@ router.get('/catalog', (_req, res) => {
     },
     category: item.category,
     relatedProducts: item.pairs_with_ids,
+    source_connection_id: item.source_connection_id,
   }));
 
   res.json({

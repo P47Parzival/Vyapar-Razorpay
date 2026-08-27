@@ -5,6 +5,7 @@ import { getPolicyConfig, updatePolicyConfig } from '../gateway/policy-config.js
 import { getLedgerEntries, getLedgerEntry, getLedgerEntriesSince } from '../ledger/ledger.js';
 import { runGrowthAgent, type GrowthAgentScenario } from '../agents/growth-agent.js';
 import { runBuyerAgent } from '../agents/buyer-agent.js';
+import { connectShopifyStore, getConnections } from '../shopify/connector.js';
 
 const router = Router();
 
@@ -201,10 +202,14 @@ router.get('/customers', (req, res) => {
 router.get('/onboarding/status', (_req, res) => {
   const config = getPolicyConfig('default');
   const itemCount = (db.prepare('SELECT COUNT(*) as count FROM catalog_items').get() as { count: number }).count;
+  const shopifyCount = (db.prepare('SELECT COUNT(*) as count FROM catalog_items WHERE source_connection_id IS NOT NULL').get() as { count: number }).count;
+  const connections = getConnections();
   res.json({
     catalog_connected: itemCount > 0,
     catalog_item_count: itemCount,
+    shopify_item_count: shopifyCount,
     agent_commerce_enabled: config.agent_commerce_enabled,
+    connections,
   });
 });
 
@@ -254,6 +259,49 @@ router.patch('/onboarding/toggle', (req, res) => {
   }
   const updated = updatePolicyConfig('default', { agent_commerce_enabled });
   res.json({ agent_commerce_enabled: updated.agent_commerce_enabled });
+});
+
+router.post('/onboarding/connect-shopify', async (req, res) => {
+  try {
+    const { shop_domain, admin_api_access_token, client_id, client_secret } = req.body;
+
+    if (!shop_domain || typeof shop_domain !== 'string') {
+      res.status(400).json({ error: 'shop_domain is required' });
+      return;
+    }
+    if (!shop_domain.endsWith('.myshopify.com')) {
+      res.status(400).json({ error: 'Shop domain must end in .myshopify.com (e.g. yourstore.myshopify.com)' });
+      return;
+    }
+
+    const hasClientCreds = client_id && client_secret;
+    const hasDirectToken = admin_api_access_token && typeof admin_api_access_token === 'string';
+
+    if (!hasClientCreds && !hasDirectToken) {
+      res.status(400).json({ error: 'Either client_id + client_secret, or admin_api_access_token is required' });
+      return;
+    }
+
+    const result = await connectShopifyStore({
+      shopDomain: shop_domain,
+      clientId: hasClientCreds ? client_id : undefined,
+      clientSecret: hasClientCreds ? client_secret : undefined,
+      accessToken: hasDirectToken ? admin_api_access_token : undefined,
+    });
+    res.json({
+      success: true,
+      connection_id: result.connectionId,
+      shop_name: result.shopName,
+      products_imported: result.productsImported,
+    });
+  } catch (err: any) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+router.get('/onboarding/connections', (_req, res) => {
+  const connections = getConnections();
+  res.json({ connections });
 });
 
 // --- Agent trigger endpoints ---

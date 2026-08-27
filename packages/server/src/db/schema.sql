@@ -1,3 +1,13 @@
+CREATE TABLE IF NOT EXISTS shopify_connections (
+  id TEXT PRIMARY KEY,
+  shop_domain TEXT NOT NULL,
+  access_token_encrypted TEXT NOT NULL,
+  connected_at TEXT NOT NULL DEFAULT (datetime('now')),
+  last_synced_at TEXT,
+  product_count INTEGER NOT NULL DEFAULT 0,
+  status TEXT NOT NULL DEFAULT 'active'
+);
+
 CREATE TABLE IF NOT EXISTS catalog_items (
   id TEXT PRIMARY KEY,
   title TEXT NOT NULL,
@@ -6,7 +16,9 @@ CREATE TABLE IF NOT EXISTS catalog_items (
   category TEXT NOT NULL,
   stock INTEGER NOT NULL DEFAULT 100,
   pairs_with_ids TEXT NOT NULL DEFAULT '[]', -- JSON array of item IDs
-  is_active INTEGER NOT NULL DEFAULT 1
+  is_active INTEGER NOT NULL DEFAULT 1,
+  source_connection_id TEXT DEFAULT NULL REFERENCES shopify_connections(id),
+  shopify_product_id TEXT DEFAULT NULL
 );
 
 CREATE TABLE IF NOT EXISTS policy_config (

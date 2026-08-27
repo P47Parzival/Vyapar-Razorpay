@@ -34,4 +34,11 @@ if (!policyColNames.includes('agent_commerce_enabled')) {
   db.exec("ALTER TABLE policy_config ADD COLUMN agent_commerce_enabled INTEGER NOT NULL DEFAULT 1");
 }
 
+const catalogCols = db.prepare("PRAGMA table_info(catalog_items)").all() as { name: string }[];
+const catalogColNames = catalogCols.map(c => c.name);
+if (!catalogColNames.includes('source_connection_id')) {
+  db.exec("ALTER TABLE catalog_items ADD COLUMN source_connection_id TEXT DEFAULT NULL");
+  db.exec("ALTER TABLE catalog_items ADD COLUMN shopify_product_id TEXT DEFAULT NULL");
+}
+
 export default db;
