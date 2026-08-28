@@ -59,7 +59,7 @@ export default function OrdersAndCustomers() {
   };
 
   return (
-    <div className="bg-white rounded-lg shadow border border-gray-200">
+    <div className="bg-white rounded-lg shadow border border-gray-200 flex flex-col h-full">
       <div className="px-4 py-3 border-b border-gray-200">
         <div className="flex items-center justify-between">
           <div>
@@ -83,7 +83,7 @@ export default function OrdersAndCustomers() {
         </div>
       </div>
 
-      <div className="p-3 max-h-[320px] overflow-y-auto">
+      <div className="p-3 flex-1 overflow-y-auto min-h-0">
         {tab === 'orders' && (
           orders.length === 0 ? (
             <p className="text-sm text-gray-400 text-center py-6">No orders yet — run a purchase through any entry point</p>

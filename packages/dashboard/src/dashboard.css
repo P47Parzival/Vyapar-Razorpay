@@ -1,0 +1,110 @@
+/* ═══════════════════════════════════════════════════════
+   Vyapar Dashboard — Premium Light Theme
+   ═══════════════════════════════════════════════════════ */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+body:has(.dashboard-root) {
+  background: #F7F8FA !important;
+}
+
+.dashboard-root {
+  min-height: 100vh;
+  background: #F7F8FA;
+  color: #1a202c;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+.dashboard-root * {
+  font-family: inherit;
+}
+
+/* ─── Header ─── */
+.dashboard-header {
+  background: #FFFFFF;
+  border-bottom: 1px solid #E8ECF1;
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+}
+
+/* ─── Card soft shadows ─── */
+.dashboard-root .shadow {
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06),
+              0 1px 2px rgba(0, 0, 0, 0.03) !important;
+}
+
+/* ─── Input focus ─── */
+.dashboard-root input,
+.dashboard-root select {
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.dashboard-root input:focus,
+.dashboard-root select:focus {
+  border-color: #6366F1 !important;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1) !important;
+  outline: none;
+}
+
+/* ─── Button / interactive transitions ─── */
+.dashboard-root button {
+  transition: all 0.15s ease;
+}
+
+/* ─── Hover refinement ─── */
+.dashboard-root .hover\:bg-gray-50:hover {
+  background: #F1F5F9 !important;
+}
+
+/* ─── Grid cards stretch to equal height ─── */
+.dashboard-grid-stretch {
+  align-items: stretch;
+}
+
+.dashboard-grid-stretch > * {
+  min-height: 100%;
+}
+
+/* ─── Right sidebar compact ─── */
+.dashboard-sidebar .px-4 {
+  padding-left: 0.75rem !important;
+  padding-right: 0.75rem !important;
+}
+
+.dashboard-sidebar .py-3 {
+  padding-top: 0.5rem !important;
+  padding-bottom: 0.5rem !important;
+}
+
+.dashboard-sidebar .p-4 {
+  padding: 0.75rem !important;
+}
+
+.dashboard-sidebar .space-y-3 > * + * {
+  margin-top: 0.5rem !important;
+}
+
+.dashboard-sidebar .space-y-2\.5 > * + * {
+  margin-top: 0.5rem !important;
+}
+
+.dashboard-sidebar h2 {
+  font-size: 0.875rem !important;
+}
+
+/* ─── Scrollbar ─── */
+.dashboard-root ::-webkit-scrollbar {
+  width: 5px;
+}
+.dashboard-root ::-webkit-scrollbar-track {
+  background: transparent;
+}
+.dashboard-root ::-webkit-scrollbar-thumb {
+  background: #D1D5DB;
+  border-radius: 3px;
+}
+.dashboard-root ::-webkit-scrollbar-thumb:hover {
+  background: #9CA3AF;
+}

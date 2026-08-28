@@ -48,21 +48,24 @@ export default function RevenueCounter() {
   const formatCurrency = (paise: number) => `₹${(paise / 100).toLocaleString('en-IN')}`;
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-      <div className="bg-white rounded-lg shadow border border-gray-200 p-4">
-        <p className="text-xs text-gray-500 font-medium uppercase tracking-wider">Cart Recovery</p>
-        <p className="text-2xl font-bold text-orange-600 mt-1">{formatCurrency(stats.recovered)}</p>
-        <p className="text-xs text-gray-400 mt-0.5">Recovered via cart-recovery agent</p>
+    <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+      <div className="bg-white rounded-lg shadow border border-gray-100 p-5 relative overflow-hidden">
+        <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-amber-400 to-orange-500" />
+        <p className="text-[11px] text-gray-500 font-semibold uppercase tracking-wider">Cart Recovery</p>
+        <p className="text-3xl font-extrabold text-gray-900 mt-2 tracking-tight">{formatCurrency(stats.recovered)}</p>
+        <p className="text-xs text-gray-400 mt-1">Recovered via cart-recovery agent</p>
       </div>
-      <div className="bg-white rounded-lg shadow border border-gray-200 p-4">
-        <p className="text-xs text-gray-500 font-medium uppercase tracking-wider">Upsell Revenue</p>
-        <p className="text-2xl font-bold text-purple-600 mt-1">{formatCurrency(stats.upsell)}</p>
-        <p className="text-xs text-gray-400 mt-0.5">Upsell revenue generated</p>
+      <div className="bg-white rounded-lg shadow border border-gray-100 p-5 relative overflow-hidden">
+        <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-purple-400 to-violet-500" />
+        <p className="text-[11px] text-gray-500 font-semibold uppercase tracking-wider">Upsell Revenue</p>
+        <p className="text-3xl font-extrabold text-gray-900 mt-2 tracking-tight">{formatCurrency(stats.upsell)}</p>
+        <p className="text-xs text-gray-400 mt-1">Upsell revenue generated</p>
       </div>
-      <div className="bg-white rounded-lg shadow border border-gray-200 p-4">
-        <p className="text-xs text-gray-500 font-medium uppercase tracking-wider">AI Buyer</p>
-        <p className="text-2xl font-bold text-blue-600 mt-1">{formatCurrency(stats.buyer)}</p>
-        <p className="text-xs text-gray-400 mt-0.5">AI-buyer transactions completed</p>
+      <div className="bg-white rounded-lg shadow border border-gray-100 p-5 relative overflow-hidden">
+        <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-400 to-indigo-500" />
+        <p className="text-[11px] text-gray-500 font-semibold uppercase tracking-wider">AI Buyer</p>
+        <p className="text-3xl font-extrabold text-gray-900 mt-2 tracking-tight">{formatCurrency(stats.buyer)}</p>
+        <p className="text-xs text-gray-400 mt-1">AI-buyer transactions completed</p>
       </div>
     </div>
   );

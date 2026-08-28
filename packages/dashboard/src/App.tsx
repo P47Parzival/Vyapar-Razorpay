@@ -1,3 +1,4 @@
+import { useNavigate } from 'react-router-dom';
 import LedgerFeed from './components/LedgerFeed';
 import OrdersAndCustomers from './components/OrdersAndCustomers';
 import AgentTriggers from './components/AgentTriggers';
@@ -6,43 +7,57 @@ import PolicyPanel from './components/PolicyPanel';
 import AgentAccessPanel from './components/AgentAccessPanel';
 import MandatePanel from './components/MandatePanel';
 import MerchantOnboarding from './components/MerchantOnboarding';
+import './dashboard.css';
 
 function App() {
+  const navigate = useNavigate();
+
   return (
-    <div className="max-w-7xl mx-auto px-4 py-8">
-      <header className="mb-8">
-        <div className="flex items-center gap-3">
-          <h1 className="text-3xl font-bold text-gray-900">Razorpay Agentic Commerce Layer</h1>
-          <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200 font-medium">
-            TEST MODE
-          </span>
-          <span className="text-xs px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-800 border border-indigo-200 font-medium">
-            MCP
-          </span>
+    <div className="dashboard-root">
+      <header className="dashboard-header">
+        <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => navigate('/')}
+              className="text-sm text-gray-400 hover:text-gray-800 transition-colors"
+            >
+              &larr;
+            </button>
+            <h1 className="text-lg font-bold text-gray-900">Vyapar</h1>
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 font-medium">
+              TEST MODE
+            </span>
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-600 border border-indigo-200 font-medium">
+              MCP
+            </span>
+          </div>
+          <p className="text-xs text-gray-400 font-medium hidden sm:block">
+            Agentic Commerce Dashboard
+          </p>
         </div>
-        <p className="text-gray-600 mt-1">
-          Merchant: <span className="font-semibold">Vyapar</span> (Demo Tenant) — any AI agent can discover and transact, gated by deterministic policy
-        </p>
-        <p className="text-xs text-gray-400 mt-1">
-          Platform capability: zero-code onboarding, MCP + .well-known discovery, AP2/UAP mandates, webhook triggers, merchant-owned data
-        </p>
       </header>
 
-      <main className="space-y-6">
+      <main className="max-w-7xl mx-auto px-4 py-6 space-y-6">
         <RevenueCounter />
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2 space-y-6">
+          <div className="lg:col-span-2">
             <LedgerFeed />
-            <OrdersAndCustomers />
           </div>
-          <div className="space-y-4">
+          <div className="space-y-4 dashboard-sidebar">
             <MerchantOnboarding />
             <MandatePanel />
-            <AgentAccessPanel />
-            <PolicyPanel />
-            <AgentTriggers />
           </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <OrdersAndCustomers />
+          <PolicyPanel />
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <AgentAccessPanel />
+          <AgentTriggers />
         </div>
       </main>
     </div>
