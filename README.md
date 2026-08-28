@@ -336,3 +336,66 @@ To accept real payments for this pilot merchant and settle real funds to their b
 - The merchant's explicit written consent to receive real payments through this platform
 
 The code is ready. The business and compliance prerequisites are not — and honestly naming them is more credible than hand-waving past them.
+
+---
+
+## Demo: In-App Checkout via Claude Desktop
+
+This demo shows Claude Desktop — an app we did not build — completing a real, policy-gated, test-mode transaction against a live merchant catalog, using our MCP server as the checkout layer. The full audit trail appears in the dashboard with zero manual entry.
+
+### Setup (before judges arrive)
+
+1. **Start the server**: `npm run dev` (or `npm run dev:server` for server only)
+2. **Open the dashboard**: `http://localhost:5173` in a browser
+3. **Open Claude Desktop** (must have been restarted after the MCP config was added)
+4. **Issue a mandate from the dashboard**: click "Issue Mandate" — set Agent = Buyer, Max = ₹1000, Categories = accessories, Expiry = 30 min. Say out loud: "I've authorized this agent to spend up to ₹1,000 on accessories, expiring in 30 minutes."
+
+### The purchase (Claude Desktop)
+
+5. **Type in Claude Desktop**:
+   > "I want to buy a snowboard under ₹800. Can you check what's available and purchase one if I have an active spending authorization?"
+
+6. **Narrate as Claude works**:
+   - Claude calls `get_active_mandate` — "It's checking if it has spending authorization. It found the mandate we just issued."
+   - Claude calls `browse_catalog` — "Now it's browsing real product data. These items are live from a connected Shopify store, not a static list we wrote."
+   - Claude reasons about which item fits the budget and category.
+   - Claude calls `submit_purchase_proposal` — "This is the only door into the Policy Gateway. Claude cannot touch Razorpay directly — it can only propose."
+
+7. **Claude reports success**: it will say something like "I've purchased The Collection Snowboard: Hydrogen for ₹600. A payment link was created."
+
+8. **Switch to the dashboard** (do not wait for a question from judges):
+   - Point to the new green ledger row with **MCP EXTERNAL** + **LIVE SHOPIFY** + **TEST CHECKOUT** badges
+   - Expand it: show all 6 policy checks passing, the Razorpay payment link ID, the human-readable explanation
+   - Point to the Orders tab: new order with `source: external_mcp_client`, the Shopify product ID
+   - Say: "You just watched Claude Desktop — an app we didn't build — complete a real, policy-gated, test-mode transaction against a real merchant catalog. Here is the exact audit trail it produced, with zero manual entry on our part."
+
+### The graceful failure (Claude Desktop)
+
+9. **In the dashboard**: lower the per-transaction cap to ₹500 (Policy panel, set max per-transaction to 500) — or just note that the mandate caps at ₹1000 and pick a product above that.
+
+10. **Type in Claude Desktop**:
+    > "Actually, can you get me The Collection Snowboard: Oxygen? I think it's around ₹1025."
+
+11. **Claude attempts the purchase** and gets denied. It will explain the specific reason conversationally — something like: "That snowboard costs ₹1,025, which exceeds the ₹1,000 limit on your current spending authorization. I can't complete this purchase."
+
+12. **Switch to the dashboard**: point to the new **red** ledger row. Expand it — show which check failed (`MANDATE_SCOPE_EXCEEDED`), the attempted amount vs. the limit. Say: "The denial happened inside the checkout surface itself — Claude explained exactly why it couldn't proceed. The same denial is recorded in the audit ledger with the full policy trace."
+
+### Closing (one sentence)
+
+> "Every money action here was explainable, bounded by a mandate a human explicitly issued, and gated by a deterministic policy layer that never once called an LLM to decide whether money should move."
+
+### Timing
+
+- Setup: 2 min (before judges)
+- The purchase: ~45 sec (Claude takes 5-10s to reason through tool calls)
+- Dashboard audit trail: 30 sec
+- The graceful failure: ~30 sec
+- Closing: 10 sec
+- **Total live demo: under 2 minutes**
+
+### Tips
+
+- Don't script exact words you expect Claude to say — its phrasing varies. Script what you'll point at and say yourself.
+- If Claude asks a clarifying question instead of immediately buying, just answer naturally — it's still demonstrating agent reasoning, which is the point.
+- Have the dashboard visible on a second monitor or split screen so the switch is instant.
+- The mandate expiry is real — if more than 30 minutes pass between issuing and demo, issue a fresh one.

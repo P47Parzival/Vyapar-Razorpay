@@ -28,8 +28,9 @@ export function createMcpServer(): McpServer {
   }, async ({ category }) => {
     const items = getAllCatalogItems();
     const filtered = category ? items.filter(i => i.category === category) : items;
+    const inStock = filtered.filter(i => i.stock > 0);
 
-    const catalog = filtered.map(i => ({
+    const catalog = inStock.map(i => ({
       id: i.id,
       name: i.title,
       description: i.description,
@@ -38,6 +39,7 @@ export function createMcpServer(): McpServer {
       category: i.category,
       stock: i.stock,
       pairs_with: i.pairs_with_ids,
+      source: i.source_connection_id ? 'live_shopify' : 'demo_catalog',
     }));
 
     return {
@@ -79,9 +81,9 @@ export function createMcpServer(): McpServer {
 
   server.registerTool('submit_purchase_proposal', {
     title: 'Submit Purchase Proposal',
-    description: 'Submit a purchase proposal to the Policy Gateway. The gateway checks the proposal against merchant policies (spending caps, velocity limits, category allowlists, mandate validity) and either approves (executing on Razorpay test mode) or denies with a structured reason. This is the ONLY way to transact with this merchant.',
+    description: 'Submit a purchase proposal to the Policy Gateway. The gateway checks the proposal against merchant policies (spending caps, velocity limits, category allowlists, mandate validity) and either approves (executing on Razorpay test mode) or denies with a structured reason code and explanation. Call get_active_mandate first to obtain the mandate_token and check your spending scope. This is the ONLY way to transact with this merchant.',
     inputSchema: {
-      mandate_token: z.string().describe('Mandate token (mandate ID) authorizing this agent to transact'),
+      mandate_token: z.string().describe('The mandate_id from get_active_mandate response'),
       action: z.enum(['create_payment_link', 'create_order']).describe('The Razorpay action to perform'),
       amount_paise: z.number().describe('Amount in paise (100 paise = ₹1). Must match catalog price.'),
       category: z.string().describe('Product category from catalog'),
