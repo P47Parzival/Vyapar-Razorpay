@@ -17,12 +17,24 @@ interface OnboardingStatus {
   connections: ShopifyConnection[];
 }
 
+function timeAgo(dateStr: string | null): string {
+  if (!dateStr) return 'never';
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.floor(hours / 24)}d ago`;
+}
+
 export default function MerchantOnboarding() {
   const [status, setStatus] = useState<OnboardingStatus | null>(null);
   const [source, setSource] = useState('shopify_real');
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState<string | null>(null);
   const [toggling, setToggling] = useState(false);
+  const [syncing, setSyncing] = useState<string | null>(null);
   const [shopDomain, setShopDomain] = useState('');
   const [clientId, setClientId] = useState('');
   const [clientSecret, setClientSecret] = useState('');
@@ -91,6 +103,24 @@ export default function MerchantOnboarding() {
     setImporting(false);
   };
 
+  const handleSync = async (connectionId: string) => {
+    setSyncing(connectionId);
+    setImportResult(null);
+    try {
+      const res = await fetch(`/api/onboarding/sync-shopify/${connectionId}`, { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        setImportResult(`Synced: +${data.added} new, ${data.updated} updated, -${data.deactivated} removed | ${data.totalActive} active`);
+        fetchStatus();
+      } else {
+        setShopError(data.error || 'Sync failed');
+      }
+    } catch {
+      setShopError('Sync failed — connection may be expired');
+    }
+    setSyncing(null);
+  };
+
   const handleToggle = async () => {
     if (!status) return;
     setToggling(true);
@@ -144,12 +174,21 @@ export default function MerchantOnboarding() {
                 <div key={conn.id} className="p-2 bg-emerald-50 border border-emerald-200 rounded text-xs">
                   <div className="flex items-center justify-between">
                     <span className="font-medium text-emerald-900">{conn.shop_domain}</span>
-                    <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${conn.status === 'active' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
-                      {conn.status.toUpperCase()}
-                    </span>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        onClick={() => handleSync(conn.id)}
+                        disabled={syncing === conn.id}
+                        className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-200 text-emerald-800 hover:bg-emerald-300 disabled:opacity-50 transition-colors"
+                      >
+                        {syncing === conn.id ? 'Syncing...' : 'Refresh'}
+                      </button>
+                      <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${conn.status === 'active' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
+                        {conn.status.toUpperCase()}
+                      </span>
+                    </div>
                   </div>
                   <div className="text-emerald-600 mt-0.5">
-                    {conn.product_count} products | Last synced: {conn.last_synced_at ? new Date(conn.last_synced_at).toLocaleString() : 'never'}
+                    {conn.product_count} products | Synced {timeAgo(conn.last_synced_at)} | Auto-refresh every 15 min
                   </div>
                 </div>
               ))}

@@ -280,3 +280,59 @@ This project is a working prototype of the middle layer (#2), built ahead of the
 ### What this means for judges
 
 Every architectural choice in this project (the deterministic gateway, the scoped mandates, the platform/merchant separation, the zero-code onboarding, the merchant-owned data tables) is a direct response to a specific, named, real-world friction that either killed a live product (Instant Checkout v1) or is the stated differentiator of a live competitor (GoKwik). None of it is speculative.
+
+---
+
+## Pilot: Real Shopify Catalog Connection
+
+### What was connected
+
+A real Shopify development store (`vyapar-hmndi3kr.myshopify.com`, store name: "Vyapar") was connected as a live pilot. This is a Shopify-hosted store with real product data — not a mock, not seeded fixtures, not a simulation.
+
+17 products were imported from the store's live catalog (Shopify's default development store sample data: Gift Cards, Snowboards, Selling Plans items). These sit alongside the 15 pre-existing demo catalog items — the pilot is additive, not destructive.
+
+### How the merchant connected (zero engineering work)
+
+The merchant (in this case, the project developer acting as the pilot merchant) performed the following steps, taking under two minutes:
+
+1. Opened the Shopify Dev Dashboard and created an app
+2. Configured Admin API scopes: granted `read_products` only
+3. Installed the app on the development store
+4. Copied the Client ID and Client Secret from the app settings
+5. Pasted both into Vyapar's onboarding form (domain + credentials)
+
+No code was written by the merchant. No OAuth app review was needed. No Shopify approval process. The platform (Vyapar) handles the token exchange (client credentials grant for a temporary access token) and encryption automatically.
+
+### The boundary: real catalog, test-mode checkout
+
+Product data flowing through this system is real — live from the connected Shopify store, synced every 15 minutes, with manual refresh available. Prices, stock levels, titles, and descriptions are the merchant's actual catalog data.
+
+Payment settlement is not real. All Razorpay calls use test-mode API keys belonging to the project developer's own Razorpay account. No funds are transferred to the connected Shopify merchant or anyone else. This is disclosed explicitly on every surface:
+
+- The `.well-known/agent-commerce.json` manifest carries `"mode": "test"` and `"catalog_source": "live_shopify_pilot"` at the top level
+- Every Shopify-sourced catalog item in the API includes `checkout_mode: "razorpay_test"` and a human-readable disclosure note
+- The dashboard shows paired `LIVE SHOPIFY` + `TEST CHECKOUT` badges on any ledger entry involving pilot items
+- The MCP server's proposal responses include a `settlement_disclosure` field for any transaction against pilot catalog items
+
+### Why real checkout is out of scope (and why that's honest, not a gap)
+
+Moving real funds to a real third-party merchant through Razorpay requires:
+
+1. **Razorpay Partner account** — a business relationship with Razorpay (Partner Dashboard access, `client_id`/`client_secret` from Razorpay, not self-serve)
+2. **Linked Account with KYC** — the pilot merchant must submit PAN, bank account details, and business proof; Razorpay must verify and approve
+3. **Route-based settlement** — transfers/settlements configured per-transaction to the merchant's linked account, with hold periods and compliance obligations
+4. **Chargeback and refund liability** — real financial risk that requires legal agreements, not just API integration
+
+None of this is available in the time scope of a hackathon, and even if it were, taking on real financial risk with a pilot merchant's real money for a demo deadline would be reckless. The test-mode boundary is a deliberate architectural choice — the same code path that processes a test-mode payment would process a real one, with only the Razorpay credentials and Route configuration changing. The policy gateway, the six checks, the mandate system, and the ledger all work identically regardless of whether the payment is real.
+
+### What a production version additionally requires
+
+To accept real payments for this pilot merchant and settle real funds to their bank account:
+
+- Razorpay Partner approval (business relationship, not a self-serve signup)
+- A Linked Account created for the merchant with verified KYC documents
+- Route-based transfer logic in the Razorpay execution layer (the only code change needed — the gateway stays as-is)
+- Legal agreements covering chargeback liability, refund policy, and settlement schedules
+- The merchant's explicit written consent to receive real payments through this platform
+
+The code is ready. The business and compliance prerequisites are not — and honestly naming them is more credible than hand-waving past them.

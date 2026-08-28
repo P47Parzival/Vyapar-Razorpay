@@ -5,7 +5,7 @@ import { getPolicyConfig, updatePolicyConfig } from '../gateway/policy-config.js
 import { getLedgerEntries, getLedgerEntry, getLedgerEntriesSince } from '../ledger/ledger.js';
 import { runGrowthAgent, type GrowthAgentScenario } from '../agents/growth-agent.js';
 import { runBuyerAgent } from '../agents/buyer-agent.js';
-import { connectShopifyStore, getConnections } from '../shopify/connector.js';
+import { connectShopifyStore, getConnections, syncShopifyConnection } from '../shopify/connector.js';
 
 const router = Router();
 
@@ -302,6 +302,16 @@ router.post('/onboarding/connect-shopify', async (req, res) => {
 router.get('/onboarding/connections', (_req, res) => {
   const connections = getConnections();
   res.json({ connections });
+});
+
+router.post('/onboarding/sync-shopify/:connectionId', async (req, res) => {
+  try {
+    const { connectionId } = req.params;
+    const result = await syncShopifyConnection(connectionId);
+    res.json({ success: true, ...result });
+  } catch (err: any) {
+    res.status(400).json({ success: false, error: err.message });
+  }
 });
 
 // --- Agent trigger endpoints ---

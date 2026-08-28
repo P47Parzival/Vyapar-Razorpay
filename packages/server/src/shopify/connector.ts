@@ -216,3 +216,108 @@ export async function connectShopifyStore(opts: ConnectOptions): Promise<Connect
 export function getConnections() {
   return db.prepare('SELECT id, shop_domain, connected_at, last_synced_at, product_count, status FROM shopify_connections ORDER BY connected_at DESC').all();
 }
+
+export interface SyncResult {
+  updated: number;
+  added: number;
+  deactivated: number;
+  totalActive: number;
+}
+
+export async function syncShopifyConnection(connectionId: string): Promise<SyncResult> {
+  const conn = db.prepare('SELECT id, shop_domain, access_token_encrypted, status FROM shopify_connections WHERE id = ?').get(connectionId) as any;
+  if (!conn) throw new Error('Connection not found');
+  if (conn.status === 'revoked') throw new Error('Connection is revoked');
+
+  const decrypted = decryptToken(conn.access_token_encrypted);
+  let accessToken: string;
+
+  // Stored credentials may be JSON (client_id + client_secret) or a direct token
+  try {
+    const creds = JSON.parse(decrypted);
+    if (creds.client_id && creds.client_secret) {
+      const tokenResult = await exchangeClientCredentials(conn.shop_domain, creds.client_id, creds.client_secret);
+      accessToken = tokenResult.access_token;
+    } else {
+      accessToken = decrypted;
+    }
+  } catch {
+    accessToken = decrypted;
+  }
+
+  const products = await fetchShopifyProducts(conn.shop_domain, accessToken);
+  const now = new Date().toISOString();
+
+  const upsertItem = db.prepare(
+    `INSERT INTO catalog_items (id, title, description, price_paise, category, stock, pairs_with_ids, is_active, source_connection_id, shopify_product_id)
+     VALUES (?, ?, ?, ?, ?, ?, '[]', 1, ?, ?)
+     ON CONFLICT(id) DO UPDATE SET
+       title = excluded.title,
+       description = excluded.description,
+       price_paise = excluded.price_paise,
+       stock = excluded.stock,
+       category = excluded.category,
+       is_active = 1`
+  );
+
+  let added = 0;
+  let updated = 0;
+  const seenIds = new Set<string>();
+
+  const syncMany = db.transaction(() => {
+    for (const product of products) {
+      const variant = product.variants[0];
+      if (!variant) continue;
+
+      const pricePaise = priceToPaise(variant.price);
+      if (pricePaise <= 0) continue;
+
+      const totalStock = product.variants.reduce((sum, v) => sum + Math.max(0, v.inventory_quantity || 0), 0);
+      const category = mapCategory(product.product_type || '', product.tags || '');
+      const description = stripHtml(product.body_html || product.title);
+      const itemId = `shopify_${product.id}`;
+      seenIds.add(itemId);
+
+      const existing = db.prepare('SELECT id FROM catalog_items WHERE id = ?').get(itemId);
+      upsertItem.run(itemId, product.title, description || product.title, pricePaise, category, totalStock, connectionId, String(product.id));
+
+      if (existing) { updated++; } else { added++; }
+    }
+
+    // Deactivate items from this connection that are no longer in Shopify
+    const allConnectionItems = db.prepare('SELECT id FROM catalog_items WHERE source_connection_id = ? AND is_active = 1').all(connectionId) as { id: string }[];
+    let deactivated = 0;
+    for (const item of allConnectionItems) {
+      if (!seenIds.has(item.id)) {
+        db.prepare('UPDATE catalog_items SET is_active = 0 WHERE id = ?').run(item.id);
+        deactivated++;
+      }
+    }
+
+    db.prepare('UPDATE shopify_connections SET last_synced_at = ?, product_count = ?, status = ? WHERE id = ?')
+      .run(now, products.length, 'active', connectionId);
+
+    return deactivated;
+  });
+
+  const deactivated = syncMany();
+  const totalActive = (db.prepare('SELECT COUNT(*) as count FROM catalog_items WHERE source_connection_id = ? AND is_active = 1').get(connectionId) as { count: number }).count;
+
+  return { updated, added, deactivated, totalActive };
+}
+
+const SYNC_INTERVAL_MS = 15 * 60 * 1000;
+
+export function startAutoSync() {
+  setInterval(async () => {
+    const connections = db.prepare("SELECT id, shop_domain FROM shopify_connections WHERE status = 'active'").all() as { id: string; shop_domain: string }[];
+    for (const conn of connections) {
+      try {
+        const result = await syncShopifyConnection(conn.id);
+        console.log(`[Shopify] Auto-synced ${conn.shop_domain}: +${result.added} added, ${result.updated} updated, -${result.deactivated} deactivated`);
+      } catch (err: any) {
+        console.log(`[Shopify] Auto-sync failed for ${conn.shop_domain}: ${err.message}`);
+      }
+    }
+  }, SYNC_INTERVAL_MS);
+}

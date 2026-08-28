@@ -8,6 +8,7 @@ import catalogRouter from './catalog/catalog-api.js';
 import apiRouter from './api/routes.js';
 import webhookRouter from './webhooks/razorpay-webhook.js';
 import { handleMcpPost, handleMcpGet, handleMcpDelete } from './mcp-server/vyapar-mcp-server.js';
+import { startAutoSync } from './shopify/connector.js';
 
 seedDatabase();
 
@@ -41,9 +42,12 @@ app.get('/.well-known/agent-commerce.json', (_req, res) => {
   const host = _req.headers.host || `localhost:${PORT}`;
   const baseUrl = `http://${host}`;
   res.json({
+    mode: 'test',
     protocol_note: 'This manifest follows emerging agent-commerce discovery conventions (UCP/.well-known pattern). Not a certified UCP implementation.',
     platform_provider: 'Razorpay Agentic Commerce Layer (demo)',
     merchant: { name: 'Vyapar', id: 'default', mode: 'test' },
+    catalog_source: 'live_shopify_pilot',
+    catalog_source_note: 'Product data is live from a connected Shopify store. Payment settlement uses Razorpay test-mode credentials - no real funds are transferred.',
     catalog_feed: `${baseUrl}/api/catalog`,
     mcp_endpoint: `${baseUrl}/mcp`,
     capabilities: ['browse_catalog', 'get_product', 'submit_purchase_proposal', 'check_proposal_status'],
@@ -57,6 +61,7 @@ app.listen(PORT, () => {
   console.log(`Vyapar server running on http://localhost:${PORT}`);
   console.log(`MCP server endpoint: http://localhost:${PORT}/mcp`);
   console.log(`Discovery manifest: http://localhost:${PORT}/.well-known/agent-commerce.json`);
+  startAutoSync();
 });
 
 export default app;

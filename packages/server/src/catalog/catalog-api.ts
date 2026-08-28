@@ -23,6 +23,11 @@ router.get('/catalog', (_req, res) => {
     category: item.category,
     relatedProducts: item.pairs_with_ids,
     source_connection_id: item.source_connection_id,
+    ...(item.source_connection_id ? {
+      catalog_source: 'live_shopify_pilot',
+      checkout_mode: 'razorpay_test',
+      checkout_note: 'Real product data from connected Shopify store. Checkout uses Razorpay test mode - no real funds transferred.',
+    } : {}),
   }));
 
   res.json({

@@ -34,6 +34,8 @@ export default function DecisionDetail({ entry }: Props) {
   const checks: PolicyCheck[] = JSON.parse(entry.checks_json);
   const proposal = JSON.parse(entry.proposal_json);
   const decision = JSON.parse(entry.decision_json);
+  const itemIds: string[] = proposal.item_ids || [];
+  const isShopifySource = itemIds.some((id: string) => id.startsWith('shopify_'));
 
   return (
     <div className="px-4 pb-4 pt-1 bg-gray-50 border-t border-gray-100">
@@ -134,6 +136,19 @@ export default function DecisionDetail({ entry }: Props) {
           )}
         </div>
       </div>
+
+      {/* Shopify pilot disclosure */}
+      {isShopifySource && (
+        <div className="mb-3 p-2.5 rounded-lg border border-orange-200 bg-orange-50">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 font-medium">LIVE SHOPIFY</span>
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-orange-100 text-orange-700 font-medium">TEST CHECKOUT</span>
+          </div>
+          <p className="text-[11px] text-gray-700 leading-relaxed">
+            This purchase used Razorpay test-mode credentials — no real funds were transferred to the connected Shopify merchant. Product data was live from their store; payment settlement was not.
+          </p>
+        </div>
+      )}
 
       {/* Footer metadata */}
       <div className="flex items-center justify-between pt-2 border-t border-gray-200">

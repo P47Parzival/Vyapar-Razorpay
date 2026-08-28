@@ -115,19 +115,28 @@ function createMcpServer(): McpServer {
       });
 
       const result = await processProposal(proposal);
+      const itemIds: string[] = proposal.item_ids || [];
+      const usesShopifyItems = itemIds.some((id: string) => id.startsWith('shopify_'));
+
+      const response: any = {
+        proposal_id: proposal.proposal_id,
+        verdict: result.decision.verdict,
+        reason_code: result.decision.reason_code,
+        reason_text: result.decision.reason_text,
+        final_status: result.outcome.final_status,
+        explanation: result.ledgerRow.human_readable_explanation,
+        razorpay_response: result.outcome.razorpay_response || null,
+      };
+
+      if (usesShopifyItems) {
+        response.catalog_source = 'live_shopify_pilot';
+        response.settlement_disclosure = 'This purchase used Razorpay test-mode credentials — no real funds were transferred to the connected Shopify merchant. Product data was live from their store; payment settlement was not.';
+      }
 
       return {
         content: [{
           type: 'text' as const,
-          text: JSON.stringify({
-            proposal_id: proposal.proposal_id,
-            verdict: result.decision.verdict,
-            reason_code: result.decision.reason_code,
-            reason_text: result.decision.reason_text,
-            final_status: result.outcome.final_status,
-            explanation: result.ledgerRow.human_readable_explanation,
-            razorpay_response: result.outcome.razorpay_response || null,
-          }, null, 2),
+          text: JSON.stringify(response, null, 2),
         }],
       };
     } catch (err) {
@@ -160,20 +169,31 @@ function createMcpServer(): McpServer {
     }
 
     const decision = JSON.parse(entry.decision_json);
+    const proposal = JSON.parse(entry.proposal_json);
+    const itemIds: string[] = proposal.item_ids || [];
+    const usesShopifyItems = itemIds.some((id: string) => id.startsWith('shopify_'));
+
+    const response: any = {
+      proposal_id,
+      timestamp: entry.timestamp,
+      final_status: entry.final_status,
+      verdict: decision.verdict,
+      reason_code: decision.reason_code,
+      reason_text: decision.reason_text,
+      explanation: entry.human_readable_explanation,
+      amount_paise: entry.amount_paise,
+      category: entry.category,
+    };
+
+    if (usesShopifyItems) {
+      response.catalog_source = 'live_shopify_pilot';
+      response.settlement_disclosure = 'This purchase used Razorpay test-mode credentials — no real funds were transferred to the connected Shopify merchant. Product data was live from their store; payment settlement was not.';
+    }
+
     return {
       content: [{
         type: 'text' as const,
-        text: JSON.stringify({
-          proposal_id,
-          timestamp: entry.timestamp,
-          final_status: entry.final_status,
-          verdict: decision.verdict,
-          reason_code: decision.reason_code,
-          reason_text: decision.reason_text,
-          explanation: entry.human_readable_explanation,
-          amount_paise: entry.amount_paise,
-          category: entry.category,
-        }, null, 2),
+        text: JSON.stringify(response, null, 2),
       }],
     };
   });

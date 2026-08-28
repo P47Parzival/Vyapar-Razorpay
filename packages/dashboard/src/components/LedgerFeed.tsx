@@ -92,6 +92,14 @@ export default function LedgerFeed() {
     }
   };
 
+  const hasShopifyItems = (entry: LedgerEntry): boolean => {
+    try {
+      const proposal = JSON.parse(entry.proposal_json);
+      const itemIds: string[] = proposal.item_ids || [];
+      return itemIds.some((id: string) => id.startsWith('shopify_'));
+    } catch { return false; }
+  };
+
   return (
     <div className="bg-white rounded-lg shadow border border-gray-200">
       <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
@@ -129,6 +137,16 @@ export default function LedgerFeed() {
                           </span>
                         );
                       })()}
+                      {hasShopifyItems(entry) && (
+                        <>
+                          <span className="text-[10px] px-1.5 py-0.5 rounded border bg-emerald-50 text-emerald-700 border-emerald-200">
+                            LIVE SHOPIFY
+                          </span>
+                          <span className="text-[10px] px-1.5 py-0.5 rounded border bg-orange-50 text-orange-700 border-orange-200">
+                            TEST CHECKOUT
+                          </span>
+                        </>
+                      )}
                       <span className="text-xs text-gray-400">
                         {formatTime(entry.timestamp)}
                       </span>
