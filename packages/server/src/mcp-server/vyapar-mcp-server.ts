@@ -9,10 +9,11 @@ import { getAllCatalogItems, getCatalogItem } from '../catalog/catalog.js';
 import { processProposal } from '../gateway/policy-gateway.js';
 import { ProposalSchema } from '../agents/types.js';
 import { getLedgerEntries } from '../ledger/ledger.js';
+import db from '../db/client.js';
 
 const transports: Record<string, StreamableHTTPServerTransport> = {};
 
-function createMcpServer(): McpServer {
+export function createMcpServer(): McpServer {
   const server = new McpServer(
     { name: 'vyapar-merchant', version: '1.0.0' },
     { capabilities: {} }
@@ -146,6 +147,57 @@ function createMcpServer(): McpServer {
         isError: true,
       };
     }
+  });
+
+  server.registerTool('get_active_mandate', {
+    title: 'Get Active Mandate',
+    description: 'Check if there is an active spending mandate authorizing this agent to transact. Call this BEFORE submitting a purchase proposal to discover your current authorization scope (max amount, allowed categories, expiry). Returns the mandate details if one exists, or a clear "no active mandate" response if not. This tool is read-only — it cannot create or modify mandates.',
+    inputSchema: {
+      principal: z.string().optional().describe('Optional: filter by principal (default returns any active mandate)'),
+    },
+  }, async ({ principal }) => {
+    let query = `SELECT id, agent_id, principal, scope_max_amount_paise, scope_category_json, expires_at, issued_by, consent_method, granted_at
+      FROM mandates
+      WHERE revoked = 0 AND expires_at > datetime('now')`;
+    const params: string[] = [];
+
+    if (principal) {
+      query += ' AND principal = ?';
+      params.push(principal);
+    }
+
+    query += ' ORDER BY granted_at DESC LIMIT 1';
+
+    const row = db.prepare(query).get(...params) as any | undefined;
+
+    if (!row) {
+      return {
+        content: [{
+          type: 'text' as const,
+          text: JSON.stringify({
+            has_active_mandate: false,
+            message: 'No active spending mandate exists. A human merchant must issue one from the dashboard before you can transact.',
+          }, null, 2),
+        }],
+      };
+    }
+
+    return {
+      content: [{
+        type: 'text' as const,
+        text: JSON.stringify({
+          has_active_mandate: true,
+          mandate_id: row.id,
+          agent_id: row.agent_id,
+          scope_max_amount_paise: row.scope_max_amount_paise,
+          scope_max_amount_rupees: row.scope_max_amount_paise / 100,
+          scope_categories: JSON.parse(row.scope_category_json),
+          expires_at: row.expires_at,
+          issued_by: row.issued_by,
+          consent_method: row.consent_method,
+        }, null, 2),
+      }],
+    };
   });
 
   server.registerTool('check_proposal_status', {

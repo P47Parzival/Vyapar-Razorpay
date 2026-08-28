@@ -10,7 +10,8 @@
     "dev:server": "npm run dev --workspace=packages/server",
     "dev:dashboard": "npm run dev --workspace=packages/dashboard",
     "dev": "concurrently \"npm run dev:server\" \"npm run dev:dashboard\"",
-    "external-buyer": "npm run buy --workspace=packages/external-buyer-demo"
+    "external-buyer": "npm run buy --workspace=packages/external-buyer-demo",
+    "mcp-stdio": "npm run mcp-stdio --workspace=packages/server"
   },
   "devDependencies": {
     "concurrently": "^8.2.2"
