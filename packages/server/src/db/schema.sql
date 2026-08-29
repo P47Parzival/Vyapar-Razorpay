@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS catalog_items (
   stock INTEGER NOT NULL DEFAULT 100,
   pairs_with_ids TEXT NOT NULL DEFAULT '[]', -- JSON array of item IDs
   is_active INTEGER NOT NULL DEFAULT 1,
+  image_url TEXT DEFAULT NULL,
   source_connection_id TEXT DEFAULT NULL REFERENCES shopify_connections(id),
   shopify_product_id TEXT DEFAULT NULL
 );
@@ -29,7 +30,7 @@ CREATE TABLE IF NOT EXISTS policy_config (
   discount_ceiling_pct INTEGER NOT NULL DEFAULT 15,
   mandate_expiry_minutes INTEGER NOT NULL DEFAULT 60,
   merchant_allowlist_json TEXT NOT NULL DEFAULT '[]',
-  category_allowlist_json TEXT NOT NULL DEFAULT '["skincare","haircare","bodycare","wellness","accessories"]',
+  category_allowlist_json TEXT NOT NULL DEFAULT '[]',
   agent_commerce_enabled INTEGER NOT NULL DEFAULT 1,
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );

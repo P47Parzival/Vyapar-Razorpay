@@ -26,7 +26,7 @@ const defaultPolicy = {
   discount_ceiling_pct: 15,
   mandate_expiry_minutes: 60,
   merchant_allowlist_json: '[]',
-  category_allowlist_json: '["skincare","haircare","bodycare","wellness","accessories"]',
+  category_allowlist_json: '[]',
 };
 
 export function seedDatabase() {

@@ -31,8 +31,10 @@ function mapCategory(productType: string, tags: string): string {
       if (candidate.includes(key)) return value;
     }
   }
-  console.log(`[Shopify] Unmapped category for product_type="${productType}", tags="${tags}" — defaulting to accessories`);
-  return 'accessories';
+  if (productType && productType.trim()) {
+    return productType.trim().toLowerCase().replace(/\s+/g, '_');
+  }
+  return 'uncategorized';
 }
 
 function getEncryptionKey(): Buffer {
@@ -63,6 +65,7 @@ interface ShopifyProduct {
   body_html: string;
   product_type: string;
   tags: string;
+  image?: { src: string } | null;
   variants: Array<{
     price: string;
     inventory_quantity: number;
@@ -179,8 +182,8 @@ export async function connectShopifyStore(opts: ConnectOptions): Promise<Connect
   ).run(connectionId, shopDomain, tokenEncrypted, now, now, products.length);
 
   const insertItem = db.prepare(
-    `INSERT OR IGNORE INTO catalog_items (id, title, description, price_paise, category, stock, pairs_with_ids, is_active, source_connection_id, shopify_product_id)
-     VALUES (?, ?, ?, ?, ?, ?, '[]', 1, ?, ?)`
+    `INSERT OR IGNORE INTO catalog_items (id, title, description, price_paise, category, stock, pairs_with_ids, is_active, image_url, source_connection_id, shopify_product_id)
+     VALUES (?, ?, ?, ?, ?, ?, '[]', 1, ?, ?, ?)`
   );
 
   const importMany = db.transaction(() => {
@@ -195,6 +198,7 @@ export async function connectShopifyStore(opts: ConnectOptions): Promise<Connect
       const category = mapCategory(product.product_type || '', product.tags || '');
       const description = stripHtml(product.body_html || product.title);
       const itemId = `shopify_${product.id}`;
+      const imageUrl = product.image?.src || null;
 
       insertItem.run(
         itemId,
@@ -203,6 +207,7 @@ export async function connectShopifyStore(opts: ConnectOptions): Promise<Connect
         pricePaise,
         category,
         totalStock,
+        imageUrl,
         connectionId,
         String(product.id)
       );
@@ -249,14 +254,15 @@ export async function syncShopifyConnection(connectionId: string): Promise<SyncR
   const now = new Date().toISOString();
 
   const upsertItem = db.prepare(
-    `INSERT INTO catalog_items (id, title, description, price_paise, category, stock, pairs_with_ids, is_active, source_connection_id, shopify_product_id)
-     VALUES (?, ?, ?, ?, ?, ?, '[]', 1, ?, ?)
+    `INSERT INTO catalog_items (id, title, description, price_paise, category, stock, pairs_with_ids, is_active, image_url, source_connection_id, shopify_product_id)
+     VALUES (?, ?, ?, ?, ?, ?, '[]', 1, ?, ?, ?)
      ON CONFLICT(id) DO UPDATE SET
        title = excluded.title,
        description = excluded.description,
        price_paise = excluded.price_paise,
        stock = excluded.stock,
        category = excluded.category,
+       image_url = excluded.image_url,
        is_active = 1`
   );
 
@@ -278,8 +284,9 @@ export async function syncShopifyConnection(connectionId: string): Promise<SyncR
       const itemId = `shopify_${product.id}`;
       seenIds.add(itemId);
 
+      const imageUrl = product.image?.src || null;
       const existing = db.prepare('SELECT id FROM catalog_items WHERE id = ?').get(itemId);
-      upsertItem.run(itemId, product.title, description || product.title, pricePaise, category, totalStock, connectionId, String(product.id));
+      upsertItem.run(itemId, product.title, description || product.title, pricePaise, category, totalStock, imageUrl, connectionId, String(product.id));
 
       if (existing) { updated++; } else { added++; }
     }

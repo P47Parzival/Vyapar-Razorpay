@@ -9,6 +9,7 @@ export interface CatalogItem {
   stock: number;
   pairs_with_ids: string[];
   is_active: boolean;
+  image_url: string | null;
   source_connection_id: string | null;
   shopify_product_id: string | null;
 }
@@ -22,6 +23,7 @@ interface CatalogRow {
   stock: number;
   pairs_with_ids: string;
   is_active: number;
+  image_url: string | null;
   source_connection_id: string | null;
   shopify_product_id: string | null;
 }

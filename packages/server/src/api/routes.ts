@@ -73,7 +73,11 @@ router.post('/mandates', (req, res) => {
   const minutes = expiry_minutes || 60;
   const expiresAt = new Date(Date.now() + minutes * 60 * 1000).toISOString();
   const maxAmount = scope_max_amount_paise || 300000;
-  const categories = scope_categories || ['skincare', 'haircare', 'bodycare', 'wellness', 'accessories'];
+  let categories = scope_categories;
+  if (!categories || categories.length === 0) {
+    const rows = db.prepare('SELECT DISTINCT category FROM catalog_items WHERE is_active = 1').all() as { category: string }[];
+    categories = rows.map(r => r.category);
+  }
 
   db.prepare(
     `INSERT INTO mandates (id, agent_id, principal, granted_at, expires_at, revoked, scope_max_amount_paise, scope_category_json, issued_by, consent_method)
@@ -195,6 +199,11 @@ router.get('/customers', (req, res) => {
 
   const rows = db.prepare('SELECT * FROM customers ORDER BY last_purchase_at DESC LIMIT ?').all(limit);
   res.json({ customers: rows, count: (rows as any[]).length });
+});
+
+router.get('/categories', (_req, res) => {
+  const rows = db.prepare('SELECT DISTINCT category FROM catalog_items WHERE is_active = 1 ORDER BY category').all() as { category: string }[];
+  res.json({ categories: rows.map(r => r.category) });
 });
 
 // --- Onboarding endpoints ---

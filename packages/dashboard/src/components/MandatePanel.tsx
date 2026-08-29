@@ -13,20 +13,31 @@ interface Mandate {
   is_active: boolean;
 }
 
-const ALL_CATEGORIES = ['skincare', 'haircare', 'bodycare', 'wellness', 'accessories'];
-
 export default function MandatePanel() {
   const [mandates, setMandates] = useState<Mandate[]>([]);
+  const [allCategories, setAllCategories] = useState<string[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({
     agent_id: 'buyer',
     scope_max_rupees: '3000',
     expiry_minutes: '60',
-    categories: [...ALL_CATEGORIES],
+    categories: [] as string[],
   });
   const [submitting, setSubmitting] = useState(false);
 
-  useEffect(() => { fetchMandates(); }, []);
+  useEffect(() => {
+    fetchMandates();
+    fetchCategories();
+  }, []);
+
+  const fetchCategories = async () => {
+    try {
+      const res = await fetch('/api/categories');
+      const data = await res.json();
+      setAllCategories(data.categories);
+      setForm(prev => prev.categories.length === 0 ? { ...prev, categories: data.categories } : prev);
+    } catch { /* ignore */ }
+  };
 
   const fetchMandates = async () => {
     try {
@@ -131,7 +142,7 @@ export default function MandatePanel() {
             <div>
               <label className="block text-[10px] text-gray-600 uppercase mb-1">Allowed Categories</label>
               <div className="flex flex-wrap gap-1.5">
-                {ALL_CATEGORIES.map(cat => (
+                {allCategories.map(cat => (
                   <button
                     key={cat}
                     onClick={() => toggleCategory(cat)}

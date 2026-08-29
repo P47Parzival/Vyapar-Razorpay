@@ -399,3 +399,77 @@ This demo shows Claude Desktop — an app we did not build — completing a real
 - If Claude asks a clarifying question instead of immediately buying, just answer naturally — it's still demonstrating agent reasoning, which is the point.
 - Have the dashboard visible on a second monitor or split screen so the switch is instant.
 - The mandate expiry is real — if more than 30 minutes pass between issuing and demo, issue a fresh one.
+
+---
+
+## Demo: Growth + Agent-to-Agent, Combined
+
+This demo runs both halves of the problem statement's title back-to-back: **"AI Growth"** (measured revenue uplift via upsell) and **"Agentic Commerce"** (two independent agents, zero shared code, same protocol surface). One flow, two claims, one audit trail.
+
+### Prerequisites
+
+- Server running (`npm run dev`)
+- Dashboard open (`http://localhost:5173`)
+- Claude Desktop open with Vyapar MCP connected
+- A second terminal ready for the external buyer
+
+### Part 1 — Growth: Upsell with measured revenue uplift (Claude Desktop)
+
+1. **Issue a mandate from the dashboard**: Agent = Buyer, Max = ₹3,000, Categories = all, Expiry = 30 min.
+
+2. **Type in Claude Desktop**:
+   > "Buy me the Anti-Dandruff Shampoo from Vyapar."
+
+3. **Narrate as Claude works**: Claude calls `get_active_mandate`, then `browse_catalog`, then `submit_purchase_proposal` for the shampoo (₹380). The response includes a `suggested_addon` field — a deterministic pairing from the catalog, not an LLM decision.
+
+4. **Claude offers the addon**: It will say something like "Your shampoo is ordered! By the way, the Nourishing Conditioner (₹420) pairs well with it — would you like to add it?"
+
+5. **Accept the addon**: Say yes. Claude calls `submit_addon_proposal`. This goes through the exact same 6+1 policy checks — the base purchase does NOT pre-authorize the addon.
+
+6. **Switch to the dashboard — Orders tab**: The shampoo and conditioner appear grouped together with a computed line:
+   > ₹380 base + ₹420 addon = ₹800 — **111% uplift**
+
+   Say: "That uplift number is the direct answer to 'grow the merchant's revenue.' The suggestion was deterministic — the catalog said these items pair. Claude decided how to phrase it, not what qualifies as a pairing."
+
+### Part 1b — Growth denial (optional, 15 seconds)
+
+7. If you want to show the gateway saying "no" to an upsell: before Part 1, issue a tighter mandate (₹400 cap instead of ₹3,000). The shampoo (₹380) passes, the addon suggestion appears (conditioner, ₹420), but when you accept it, the gateway denies with `MANDATE_SCOPE_EXCEEDED`. Claude explains conversationally: "The conditioner costs ₹420, which exceeds your ₹400 spending limit."
+
+   Say: "The upsell agent can be told no by the same gateway as everything else. Growth is bounded, not unbounded."
+
+### Part 2 — Agent-to-Agent: Independent external buyer (second terminal)
+
+8. **In the second terminal**, run:
+   ```bash
+   npm run external-buyer -- "Buy me a nice skincare gift under 700 rupees"
+   ```
+
+9. **Narrate the output as it scrolls**:
+   - "This is a completely separate process. Zero shared code with the server."
+   - "It discovered the merchant through the `.well-known` manifest — same way any AI agent on the internet would."
+   - "It connected to the MCP server, browsed the catalog, and made its own LLM decision about what to buy — using AWS Bedrock, not the same Claude instance."
+   - "Now it's submitting a purchase proposal through the same gateway..."
+
+10. **Switch to the dashboard**: A new order appears with **MCP EXTERNAL** badge, alongside the upsell-grouped orders from Part 1.
+
+### Part 3 — One ledger, two agents, same checks (dashboard)
+
+11. **Point to the Orders tab**: Both sets of transactions visible — the upsell pair (UPSELL badge, uplift percentage) and the external buyer's order (MCP EXTERNAL badge). Different agents, different purposes, different code paths.
+
+12. **Point to the Ledger tab**: Every row — approved and denied — shows the same 6+1 check pipeline. Expand any row to confirm.
+
+13. **Closing line**:
+    > "Two different agents, two different purposes — one grows revenue, one proves the merchant is reachable by any AI buyer — both gated by the exact same policy layer, both fully audited. That's the complete answer to 'AI Growth and Agentic Commerce.'"
+
+### Timing
+
+- Part 1 (upsell purchase + addon): ~60 sec
+- Part 2 (external buyer): ~30 sec
+- Part 3 (dashboard walkthrough + closing): ~30 sec
+- **Total: under 2 minutes**
+
+### Fallbacks
+
+- If Claude Desktop is slow or asks clarifying questions, answer naturally — the upsell suggestion comes from the server response, not from Claude's initiative, so it will always appear.
+- If the external buyer's Bedrock LLM call fails (network, quota), show the successful run from pre-demo testing — the ledger entry is already there with the correct source attribution.
+- If a mandate expires mid-demo, issue a fresh one from the dashboard — takes 5 seconds.

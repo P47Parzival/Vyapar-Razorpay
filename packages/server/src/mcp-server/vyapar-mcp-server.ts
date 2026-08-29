@@ -13,7 +13,7 @@ import db from '../db/client.js';
 
 const transports: Record<string, StreamableHTTPServerTransport> = {};
 
-function lookupSuggestedAddon(purchasedItemIds: string[]): { item_id: string; title: string; price_paise: number; category: string } | null {
+function lookupSuggestedAddon(purchasedItemIds: string[]): { item_id: string; title: string; price_paise: number; category: string; image_url?: string } | null {
   for (const itemId of purchasedItemIds) {
     const item = getCatalogItem(itemId);
     if (!item || !item.pairs_with_ids || item.pairs_with_ids.length === 0) continue;
@@ -22,7 +22,9 @@ function lookupSuggestedAddon(purchasedItemIds: string[]): { item_id: string; ti
       if (purchasedItemIds.includes(pairId)) continue;
       const paired = getCatalogItem(pairId);
       if (paired && paired.is_active && paired.stock > 0) {
-        return { item_id: paired.id, title: paired.title, price_paise: paired.price_paise, category: paired.category };
+        const addon: any = { item_id: paired.id, title: paired.title, price_paise: paired.price_paise, category: paired.category };
+        if (paired.image_url) addon.image_url = paired.image_url;
+        return addon;
       }
     }
   }
@@ -39,24 +41,28 @@ export function createMcpServer(): McpServer {
     title: 'Browse Catalog',
     description: 'Browse the merchant catalog. Returns all active products with prices, categories, stock levels, and related product suggestions.',
     inputSchema: {
-      category: z.string().optional().describe('Optional: filter by category (skincare, haircare, bodycare, wellness, accessories)'),
+      category: z.string().optional().describe('Optional: filter by category. Browse without this parameter first to see all available categories.'),
     },
   }, async ({ category }) => {
     const items = getAllCatalogItems();
     const filtered = category ? items.filter(i => i.category === category) : items;
     const inStock = filtered.filter(i => i.stock > 0);
 
-    const catalog = inStock.map(i => ({
-      id: i.id,
-      name: i.title,
-      description: i.description,
-      price_rupees: i.price_paise / 100,
-      price_paise: i.price_paise,
-      category: i.category,
-      stock: i.stock,
-      pairs_with: i.pairs_with_ids,
-      source: i.source_connection_id ? 'live_shopify' : 'demo_catalog',
-    }));
+    const catalog = inStock.map(i => {
+      const item: any = {
+        id: i.id,
+        name: i.title,
+        description: i.description,
+        price_rupees: i.price_paise / 100,
+        price_paise: i.price_paise,
+        category: i.category,
+        stock: i.stock,
+        pairs_with: i.pairs_with_ids,
+        source: i.source_connection_id ? 'live_shopify' : 'demo_catalog',
+      };
+      if (i.image_url) item.image_url = i.image_url;
+      return item;
+    });
 
     return {
       content: [{ type: 'text' as const, text: JSON.stringify(catalog, null, 2) }],
@@ -78,19 +84,22 @@ export function createMcpServer(): McpServer {
       };
     }
 
+    const productData: any = {
+      id: item.id,
+      name: item.title,
+      description: item.description,
+      price_rupees: item.price_paise / 100,
+      price_paise: item.price_paise,
+      category: item.category,
+      stock: item.stock,
+      pairs_with: item.pairs_with_ids,
+    };
+    if (item.image_url) productData.image_url = item.image_url;
+
     return {
       content: [{
         type: 'text' as const,
-        text: JSON.stringify({
-          id: item.id,
-          name: item.title,
-          description: item.description,
-          price_rupees: item.price_paise / 100,
-          price_paise: item.price_paise,
-          category: item.category,
-          stock: item.stock,
-          pairs_with: item.pairs_with_ids,
-        }, null, 2),
+        text: JSON.stringify(productData, null, 2),
       }],
     };
   });

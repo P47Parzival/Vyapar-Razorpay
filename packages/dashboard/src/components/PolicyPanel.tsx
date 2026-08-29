@@ -172,11 +172,17 @@ export default function PolicyPanel() {
         <div className="pt-2">
           <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Allowed Categories</p>
           <div className="flex flex-wrap gap-1">
-            {policy.category_allowlist.map((cat) => (
-              <span key={cat} className="text-xs px-2 py-0.5 bg-green-50 text-green-700 border border-green-200 rounded">
-                {cat}
+            {policy.category_allowlist.length === 0 ? (
+              <span className="text-xs px-2 py-0.5 bg-green-50 text-green-700 border border-green-200 rounded">
+                All categories
               </span>
-            ))}
+            ) : (
+              policy.category_allowlist.map((cat) => (
+                <span key={cat} className="text-xs px-2 py-0.5 bg-green-50 text-green-700 border border-green-200 rounded">
+                  {cat}
+                </span>
+              ))
+            )}
           </div>
         </div>
       </div>
