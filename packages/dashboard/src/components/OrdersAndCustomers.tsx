@@ -8,6 +8,7 @@ interface Order {
   amount_paise: number;
   category: string | null;
   source: string;
+  related_order_id: string | null;
   created_at: string;
 }
 
@@ -26,6 +27,32 @@ const SOURCE_BADGES: Record<string, { label: string; classes: string }> = {
   external_mcp_client: { label: 'MCP EXTERNAL', classes: 'bg-cyan-50 text-cyan-700 border-cyan-200' },
   webhook: { label: 'WEBHOOK', classes: 'bg-purple-50 text-purple-700 border-purple-200' },
 };
+
+interface OrderGroup {
+  base: Order;
+  addon: Order | null;
+}
+
+function buildOrderGroups(orders: Order[]): OrderGroup[] {
+  const addonMap = new Map<string, Order>();
+  for (const order of orders) {
+    if (order.related_order_id) {
+      addonMap.set(order.related_order_id, order);
+    }
+  }
+
+  const groups: OrderGroup[] = [];
+
+  for (const order of orders) {
+    if (order.related_order_id) continue;
+    groups.push({
+      base: order,
+      addon: addonMap.get(order.id) || null,
+    });
+  }
+
+  return groups;
+}
 
 export default function OrdersAndCustomers() {
   const [orders, setOrders] = useState<Order[]>([]);
@@ -89,27 +116,59 @@ export default function OrdersAndCustomers() {
             <p className="text-sm text-gray-400 text-center py-6">No orders yet — run a purchase through any entry point</p>
           ) : (
             <div className="space-y-2">
-              {orders.map(order => (
-                <div key={order.id} className="p-2.5 bg-gray-50 border border-gray-200 rounded-lg">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-xs font-mono text-gray-500">{order.id}</span>
-                    {getSourceBadge(order.source)}
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-semibold text-gray-900">
-                        ₹{(order.amount_paise / 100).toFixed(0)}
-                      </span>
-                      {order.category && (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-50 text-green-700 border border-green-200">
-                          {order.category}
-                        </span>
-                      )}
+              {buildOrderGroups(orders).map(group => (
+                <div key={group.base.id} className={`rounded-lg ${group.addon ? 'border-2 border-orange-200 bg-orange-50/30' : 'border border-gray-200 bg-gray-50'}`}>
+                  <div className="p-2.5">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs font-mono text-gray-500">{group.base.id}</span>
+                      <div className="flex items-center gap-1">
+                        {group.addon && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-orange-100 text-orange-700 border border-orange-300 font-semibold">
+                            UPSELL
+                          </span>
+                        )}
+                        {getSourceBadge(group.base.source)}
+                      </div>
                     </div>
-                    <span className="text-[10px] text-gray-400">
-                      {new Date(order.created_at).toLocaleTimeString()}
-                    </span>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-semibold text-gray-900">
+                          ₹{(group.base.amount_paise / 100).toFixed(0)}
+                        </span>
+                        {group.base.category && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-50 text-green-700 border border-green-200">
+                            {group.base.category}
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-[10px] text-gray-400">
+                        {new Date(group.base.created_at).toLocaleTimeString()}
+                      </span>
+                    </div>
                   </div>
+                  {group.addon && (
+                    <div className="px-2.5 pb-2.5">
+                      <div className="pl-3 border-l-2 border-orange-300">
+                        <div className="flex items-center justify-between mb-0.5">
+                          <span className="text-[10px] font-mono text-gray-400">{group.addon.id}</span>
+                          <span className="text-[10px] text-orange-600 font-medium">addon</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-semibold text-gray-900">
+                            + ₹{(group.addon.amount_paise / 100).toFixed(0)}
+                          </span>
+                          {group.addon.category && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-50 text-green-700 border border-green-200">
+                              {group.addon.category}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="mt-2 px-2 py-1.5 bg-orange-100/60 rounded text-xs text-orange-800 font-medium">
+                        ₹{(group.base.amount_paise / 100).toFixed(0)} base + ₹{(group.addon.amount_paise / 100).toFixed(0)} addon = ₹{((group.base.amount_paise + group.addon.amount_paise) / 100).toFixed(0)} — <span className="font-bold">{Math.round((group.addon.amount_paise / group.base.amount_paise) * 100)}% uplift</span>
+                      </div>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>

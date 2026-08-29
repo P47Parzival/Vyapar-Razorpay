@@ -50,7 +50,7 @@ app.get('/.well-known/agent-commerce.json', (_req, res) => {
     catalog_source_note: 'Product data is live from a connected Shopify store. Payment settlement uses Razorpay test-mode credentials - no real funds are transferred.',
     catalog_feed: `${baseUrl}/api/catalog`,
     mcp_endpoint: `${baseUrl}/mcp`,
-    capabilities: ['browse_catalog', 'get_product', 'submit_purchase_proposal', 'check_proposal_status'],
+    capabilities: ['browse_catalog', 'get_product', 'submit_purchase_proposal', 'submit_addon_proposal', 'get_active_mandate', 'check_proposal_status'],
     mandate_required: true,
     currency: 'INR',
     policy_summary_endpoint: `${baseUrl}/api/policy/public`,

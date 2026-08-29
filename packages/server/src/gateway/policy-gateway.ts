@@ -21,6 +21,7 @@ interface GatewayResult {
   decision: Decision;
   outcome: Outcome;
   ledgerRow: LedgerRow;
+  orderId?: string;
 }
 
 const REASON_CODES: Record<string, string> = {
@@ -148,15 +149,16 @@ export async function processProposal(proposal: Proposal): Promise<GatewayResult
 
   const ledgerRow = writeLedgerEntry(proposal, checks, decision, outcome);
 
+  let orderId: string | undefined;
   if (outcome.final_status === 'executed') {
     try {
-      recordOrderAndCustomer(proposal, ledgerRow.id);
+      orderId = recordOrderAndCustomer(proposal, ledgerRow.id, (proposal as any).related_order_id || null);
     } catch (err) {
       console.error('[Gateway] CRITICAL: Ledger row written but order/customer write failed:', err);
     }
   }
 
-  return { decision, outcome, ledgerRow };
+  return { decision, outcome, ledgerRow, orderId };
 }
 
 function getSourceFromProposal(proposal: Proposal): string {
@@ -168,7 +170,7 @@ function getSourceFromProposal(proposal: Proposal): string {
   return 'internal_buyer_agent';
 }
 
-function recordOrderAndCustomer(proposal: Proposal, ledgerId: string): void {
+function recordOrderAndCustomer(proposal: Proposal, ledgerId: string, relatedOrderId: string | null): string {
   const now = new Date().toISOString();
   const identifier = proposal.counterparty || `anon_${randomUUID().slice(0, 8)}`;
   const source = getSourceFromProposal(proposal);
@@ -200,9 +202,11 @@ function recordOrderAndCustomer(proposal: Proposal, ledgerId: string): void {
   const itemIds = (proposal as any).item_ids || [];
 
   db.prepare(
-    `INSERT INTO orders (id, customer_id, ledger_id, item_ids_json, amount_paise, category, source, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-  ).run(orderId, customerId, ledgerId, JSON.stringify(itemIds), proposal.amount_paise, proposal.category, source, now);
+    `INSERT INTO orders (id, customer_id, ledger_id, item_ids_json, amount_paise, category, source, related_order_id, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(orderId, customerId, ledgerId, JSON.stringify(itemIds), proposal.amount_paise, proposal.category, source, relatedOrderId, now);
+
+  return orderId;
 }
 
 function buildRazorpayParams(proposal: Proposal): Record<string, unknown> {

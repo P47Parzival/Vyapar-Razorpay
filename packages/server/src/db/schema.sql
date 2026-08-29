@@ -79,6 +79,7 @@ CREATE TABLE IF NOT EXISTS orders (
   amount_paise INTEGER NOT NULL,
   category TEXT,
   source TEXT NOT NULL,
+  related_order_id TEXT DEFAULT NULL,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 

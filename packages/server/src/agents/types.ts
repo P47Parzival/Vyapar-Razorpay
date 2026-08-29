@@ -19,6 +19,7 @@ export const ProposalSchema = z.object({
   original_order_id: z.string().optional(),
   item_ids: z.array(z.string()).optional(),
   triggered_by: z.enum(['simulated_button', 'webhook', 'mcp_external', 'internal']).optional(),
+  related_order_id: z.string().optional(),
 });
 
 export type Proposal = z.infer<typeof ProposalSchema>;

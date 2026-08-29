@@ -13,6 +13,22 @@ import db from '../db/client.js';
 
 const transports: Record<string, StreamableHTTPServerTransport> = {};
 
+function lookupSuggestedAddon(purchasedItemIds: string[]): { item_id: string; title: string; price_paise: number; category: string } | null {
+  for (const itemId of purchasedItemIds) {
+    const item = getCatalogItem(itemId);
+    if (!item || !item.pairs_with_ids || item.pairs_with_ids.length === 0) continue;
+
+    for (const pairId of item.pairs_with_ids) {
+      if (purchasedItemIds.includes(pairId)) continue;
+      const paired = getCatalogItem(pairId);
+      if (paired && paired.is_active && paired.stock > 0) {
+        return { item_id: paired.id, title: paired.title, price_paise: paired.price_paise, category: paired.category };
+      }
+    }
+  }
+  return null;
+}
+
 export function createMcpServer(): McpServer {
   const server = new McpServer(
     { name: 'vyapar-merchant', version: '1.0.0' },
@@ -131,9 +147,98 @@ export function createMcpServer(): McpServer {
         razorpay_response: result.outcome.razorpay_response || null,
       };
 
+      if (result.orderId) {
+        response.order_id = result.orderId;
+      }
+
       if (usesShopifyItems) {
         response.catalog_source = 'live_shopify_pilot';
-        response.settlement_disclosure = 'This purchase used Razorpay test-mode credentials — no real funds were transferred to the connected Shopify merchant. Product data was live from their store; payment settlement was not.';
+        response.settlement_disclosure = 'This purchase used Razorpay test-mode credentials - no real funds were transferred to the connected Shopify merchant. Product data was live from their store; payment settlement was not.';
+      }
+
+      if (result.outcome.final_status === 'executed' && itemIds.length > 0) {
+        const addon = lookupSuggestedAddon(itemIds);
+        if (addon) {
+          response.suggested_addon = addon;
+        }
+      }
+
+      return {
+        content: [{
+          type: 'text' as const,
+          text: JSON.stringify(response, null, 2),
+        }],
+      };
+    } catch (err) {
+      const error = err as Error;
+      return {
+        content: [{ type: 'text' as const, text: JSON.stringify({ error: error.message }) }],
+        isError: true,
+      };
+    }
+  });
+
+  server.registerTool('submit_addon_proposal', {
+    title: 'Submit Addon Purchase',
+    description: 'Submit an addon/upsell purchase linked to a previous order. Use this when a successful purchase returned a suggested_addon field and the buyer wants it. The addon goes through the SAME policy checks as any other proposal - it is NOT pre-authorized by the original purchase. If accepting it would exceed the mandate cap, it will be denied.',
+    inputSchema: {
+      mandate_token: z.string().describe('The mandate_id from get_active_mandate response'),
+      original_order_id: z.string().describe('The order_id from the original purchase response'),
+      original_proposal_id: z.string().describe('The proposal_id from the original purchase (for traceability)'),
+      addon_item_id: z.string().describe('The item_id of the suggested addon from the original purchase response'),
+      counterparty: z.string().describe('Identifier of the buyer/customer'),
+      agent_reasoning: z.string().describe('Why the buyer wants this addon'),
+    },
+  }, async ({ mandate_token, original_order_id, original_proposal_id, addon_item_id, counterparty, agent_reasoning }) => {
+    if (!mandate_token || mandate_token.trim() === '') {
+      return {
+        content: [{ type: 'text' as const, text: JSON.stringify({ error: 'mandate_token is required' }) }],
+        isError: true,
+      };
+    }
+
+    const addonItem = getCatalogItem(addon_item_id);
+    if (!addonItem || !addonItem.is_active) {
+      return {
+        content: [{ type: 'text' as const, text: JSON.stringify({ error: 'Addon item not found or inactive', addon_item_id }) }],
+        isError: true,
+      };
+    }
+
+    try {
+      const proposal = ProposalSchema.parse({
+        proposal_id: `prop_addon_${randomUUID().slice(0, 8)}`,
+        agent_type: 'buyer',
+        agent_reasoning: `Addon to ${original_proposal_id}: ${agent_reasoning}`,
+        action: 'create_order',
+        amount_paise: addonItem.price_paise,
+        currency: 'INR',
+        merchant_id: 'default',
+        counterparty: counterparty || 'external_agent',
+        category: addonItem.category,
+        requested_at: new Date().toISOString(),
+        description: `Addon purchase: ${addonItem.title} (paired with order ${original_order_id})`,
+        item_ids: [addon_item_id],
+        triggered_by: 'mcp_external',
+        related_order_id: original_order_id,
+      });
+
+      const result = await processProposal(proposal);
+
+      const response: any = {
+        proposal_id: proposal.proposal_id,
+        addon_item: { id: addonItem.id, title: addonItem.title, price_paise: addonItem.price_paise },
+        linked_to_order: original_order_id,
+        verdict: result.decision.verdict,
+        reason_code: result.decision.reason_code,
+        reason_text: result.decision.reason_text,
+        final_status: result.outcome.final_status,
+        explanation: result.ledgerRow.human_readable_explanation,
+        razorpay_response: result.outcome.razorpay_response || null,
+      };
+
+      if (result.orderId) {
+        response.addon_order_id = result.orderId;
       }
 
       return {
