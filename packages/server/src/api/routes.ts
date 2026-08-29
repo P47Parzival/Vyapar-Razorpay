@@ -6,6 +6,7 @@ import { getLedgerEntries, getLedgerEntry, getLedgerEntriesSince } from '../ledg
 import { runGrowthAgent, type GrowthAgentScenario } from '../agents/growth-agent.js';
 import { runBuyerAgent } from '../agents/buyer-agent.js';
 import { connectShopifyStore, getConnections, syncShopifyConnection } from '../shopify/connector.js';
+import { computeFindings } from '../catalog-audit/compute-findings.js';
 
 const router = Router();
 
@@ -392,6 +393,35 @@ router.post('/agents/buyer/shop', async (req, res) => {
     const error = err as Error;
     res.status(500).json({ success: false, error: error.message });
   }
+});
+
+// --- Catalog Audit endpoints ---
+
+router.get('/catalog-audit/findings', (req, res) => {
+  const batchId = req.query.batch_id as string | undefined;
+
+  const targetBatch = batchId ||
+    (db.prepare('SELECT run_batch_id FROM catalog_trials ORDER BY created_at DESC LIMIT 1').get() as { run_batch_id: string } | undefined)?.run_batch_id;
+
+  if (!targetBatch) {
+    res.json({ has_data: false, message: 'No audit runs yet. Run the trial runner first.' });
+    return;
+  }
+
+  try {
+    const findings = computeFindings(targetBatch);
+    res.json({ has_data: true, findings });
+  } catch (err: any) {
+    res.status(500).json({ has_data: false, error: err.message });
+  }
+});
+
+router.get('/catalog-audit/batches', (_req, res) => {
+  const rows = db.prepare(
+    `SELECT run_batch_id, COUNT(*) as trial_count, MIN(created_at) as started_at
+     FROM catalog_trials GROUP BY run_batch_id ORDER BY started_at DESC`
+  ).all();
+  res.json({ batches: rows });
 });
 
 export default router;

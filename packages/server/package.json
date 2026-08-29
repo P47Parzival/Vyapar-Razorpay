@@ -6,7 +6,9 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
-    "mcp-stdio": "tsx src/mcp-server/mcp-stdio.ts"
+    "mcp-stdio": "tsx src/mcp-server/mcp-stdio.ts",
+    "catalog-audit": "tsx src/catalog-audit/run-trials.ts",
+    "catalog-findings": "tsx src/catalog-audit/compute-findings.ts"
   },
   "dependencies": {
     "@aws-sdk/client-bedrock-runtime": "^3.1117.0",

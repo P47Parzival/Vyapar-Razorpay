@@ -84,6 +84,20 @@ CREATE TABLE IF NOT EXISTS orders (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+CREATE TABLE IF NOT EXISTS catalog_trials (
+  id TEXT PRIMARY KEY,
+  goal TEXT NOT NULL,
+  goal_id TEXT NOT NULL,
+  trial_number INTEGER NOT NULL,
+  catalog_snapshot_order_json TEXT NOT NULL,
+  picked_item_id TEXT,
+  run_batch_id TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_catalog_trials_batch ON catalog_trials(run_batch_id);
+CREATE INDEX IF NOT EXISTS idx_catalog_trials_goal ON catalog_trials(goal_id);
+
 CREATE INDEX IF NOT EXISTS idx_ledger_timestamp ON ledger(timestamp DESC);
 CREATE INDEX IF NOT EXISTS idx_ledger_agent_type ON ledger(agent_type);
 CREATE INDEX IF NOT EXISTS idx_ledger_final_status ON ledger(final_status);

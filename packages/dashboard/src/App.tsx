@@ -7,6 +7,7 @@ import PolicyPanel from './components/PolicyPanel';
 import AgentAccessPanel from './components/AgentAccessPanel';
 import MandatePanel from './components/MandatePanel';
 import MerchantOnboarding from './components/MerchantOnboarding';
+import CatalogAudit from './components/CatalogAudit';
 import './dashboard.css';
 
 function App() {
@@ -59,6 +60,8 @@ function App() {
           <AgentAccessPanel />
           <AgentTriggers />
         </div>
+
+        <CatalogAudit />
       </main>
     </div>
   );

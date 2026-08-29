@@ -1,0 +1,32 @@
+[
+  {
+    "id": "skincare_daily",
+    "goal": "I need a skincare product for my daily routine — something gentle that I can use every morning.",
+    "relevant_categories": ["skincare"]
+  },
+  {
+    "id": "wellness_fitness",
+    "goal": "Looking for a wellness supplement or fitness product to support my health goals.",
+    "relevant_categories": ["wellness"]
+  },
+  {
+    "id": "casual_clothing",
+    "goal": "I want something casual to wear — a t-shirt, hoodie, or jeans, nothing too formal.",
+    "relevant_categories": ["t-shirt", "graphic_t-shirt", "hoodie", "jeans", "cargo_pants"]
+  },
+  {
+    "id": "tech_gadget",
+    "goal": "I'm looking for a tech gadget or electronic accessory — something fun and useful.",
+    "relevant_categories": ["keyboard", "mouse", "bluetooth_speaker", "wireless_earbuds", "smartwatch", "desk_lamp"]
+  },
+  {
+    "id": "gift_under_1500",
+    "goal": "I need a gift for a friend's birthday, budget is under ₹1,500. Something nice from any category.",
+    "relevant_categories": []
+  },
+  {
+    "id": "haircare",
+    "goal": "I want something for my hair — shampoo, conditioner, or a treatment oil.",
+    "relevant_categories": ["haircare"]
+  }
+]
