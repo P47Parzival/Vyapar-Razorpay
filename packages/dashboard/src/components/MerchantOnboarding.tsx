@@ -141,56 +141,97 @@ export default function MerchantOnboarding() {
   const hasShopifyConnection = status.connections.length > 0;
 
   return (
-    <div className="register">
-      <div className="register-header">
-        <h2>Merchant Setup</h2>
-        <p className="font-body text-xs text-ink-muted mt-0.5">Zero-code onboarding — connect an existing catalog, flip one toggle</p>
+    <div style={{
+      background: 'linear-gradient(135deg, #FFFFFF 0%, #F0F1FA 100%)',
+      border: '1px solid var(--ledger-line)',
+      borderRadius: 10,
+      overflow: 'hidden',
+    }}>
+      {/* Header */}
+      <div style={{ padding: '24px 24px 18px' }}>
+        <div className="flex items-center gap-3">
+          <h2 className="font-display" style={{ fontSize: '1.4rem', fontWeight: 700, color: 'var(--ink)', letterSpacing: '-0.02em' }}>
+            Merchant Setup
+          </h2>
+          <span className="font-body" style={{ fontSize: 12, color: 'var(--ink-muted)' }}>
+            Enter details and get AI transactable in seconds
+          </span>
+        </div>
       </div>
 
-      <div className="register-body space-y-4">
-        {/* Step 1: Connect Catalog */}
-        <div className="p-3 rounded border" style={{
-          borderColor: status.catalog_connected ? 'var(--seal-green)' : 'var(--ledger-line)',
-          background: status.catalog_connected ? 'rgba(31,111,74,0.04)' : 'transparent',
+      <div style={{ padding: '0 24px 24px' }} className="space-y-4">
+        {/* Catalog source + Shopify connection + form + toggle — all in one card */}
+        <div style={{
+          background: '#FFFFFF',
+          borderRadius: 8,
+          border: '1.5px solid var(--ledger-line)',
+          padding: '18px',
         }}>
-          <div className="flex items-center gap-2 mb-2">
-            <div className={`seal ${status.catalog_connected ? 'seal-approved' : ''}`} style={{ width: 20, height: 20, fontSize: 10 }}>
+          {/* Catalog header */}
+          <div className="flex items-center gap-3 mb-3">
+            <div style={{
+              width: 28, height: 28, borderRadius: '50%',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 13, fontWeight: 700,
+              background: status.catalog_connected ? 'var(--seal-green)' : 'var(--signal-indigo)',
+              color: '#fff',
+            }}>
               {status.catalog_connected ? '✓' : '1'}
             </div>
-            <span className="font-body text-sm font-medium text-ink">Connect Catalog Source</span>
-            {status.catalog_connected && (
-              <span className="font-data text-[10px] text-seal-green font-medium">
-                {status.catalog_item_count} items
-              </span>
-            )}
-            {status.shopify_item_count > 0 && (
-              <span className="font-data text-[10px] text-ink-muted">
-                {status.shopify_item_count} live Shopify
-              </span>
-            )}
+            <div className="flex-1 min-w-0">
+              <h3 className="font-body" style={{ fontSize: 14, fontWeight: 600, color: 'var(--ink)' }}>
+                Connect Catalog Source
+              </h3>
+              {status.catalog_connected && (
+                <div className="flex items-center gap-3 mt-0.5">
+                  <span className="font-data" style={{ fontSize: 11, color: 'var(--seal-green)', fontWeight: 500 }}>
+                    {status.catalog_item_count} items loaded
+                  </span>
+                  {status.shopify_item_count > 0 && (
+                    <span className="font-data" style={{ fontSize: 11, color: 'var(--ink-muted)' }}>
+                      {status.shopify_item_count} from Shopify
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
 
-          {/* Active Shopify Connections */}
+          {/* Shopify connections */}
           {hasShopifyConnection && (
-            <div className="ml-7 mb-2 space-y-1.5">
+            <div className="mb-3 space-y-2">
               {status.connections.map(conn => (
-                <div key={conn.id} className="p-2 rounded border" style={{ borderColor: 'var(--seal-green)', background: 'rgba(31,111,74,0.04)' }}>
+                <div key={conn.id} style={{
+                  background: 'rgba(31,111,74,0.03)',
+                  border: '1px solid rgba(31,111,74,0.15)',
+                  borderRadius: 6,
+                  padding: '10px 12px',
+                }}>
                   <div className="flex items-center justify-between">
-                    <span className="font-body text-xs font-medium text-ink">{conn.shop_domain}</span>
-                    <div className="flex items-center gap-1.5">
+                    <span className="font-body" style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink)' }}>
+                      {conn.shop_domain}
+                    </span>
+                    <div className="flex items-center gap-2">
                       <button
                         onClick={() => handleSync(conn.id)}
                         disabled={syncing === conn.id}
-                        className="btn-primary text-[10px] px-1.5 py-0.5"
+                        style={{
+                          fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: 4,
+                          background: 'var(--seal-green)', color: '#fff', border: 'none', cursor: 'pointer',
+                          opacity: syncing === conn.id ? 0.6 : 1,
+                        }}
                       >
                         {syncing === conn.id ? 'Syncing...' : 'Refresh'}
                       </button>
-                      <span className={`font-data text-[10px] font-medium ${conn.status === 'active' ? 'text-seal-green' : 'text-seal-red'}`}>
+                      <span className="font-data" style={{
+                        fontSize: 10, fontWeight: 600,
+                        color: conn.status === 'active' ? 'var(--seal-green)' : 'var(--seal-red)',
+                      }}>
                         {conn.status.toUpperCase()}
                       </span>
                     </div>
                   </div>
-                  <p className="font-body text-[10px] text-ink-muted mt-0.5">
+                  <p className="font-body" style={{ fontSize: 11, color: 'var(--ink-muted)', marginTop: 3 }}>
                     <span className="font-data">{conn.product_count}</span> products · Synced {timeAgo(conn.last_synced_at)} · Auto-refresh every 15 min
                   </p>
                 </div>
@@ -198,54 +239,45 @@ export default function MerchantOnboarding() {
             </div>
           )}
 
-          {/* Connect form */}
-          <div className="space-y-2 ml-7">
+          {/* Form */}
+          <div className="space-y-2.5">
             <select
               value={source}
               onChange={e => setSource(e.target.value)}
-              className="w-full text-sm font-body border rounded px-2 py-1.5"
-              style={{ borderColor: 'var(--ledger-line)' }}
+              className="font-body"
+              style={{
+                width: '100%', fontSize: 13, border: '1.5px solid var(--ledger-line)',
+                borderRadius: 6, padding: '9px 12px', color: 'var(--ink)', background: '#fff',
+              }}
             >
               <option value="shopify_real">Connect a real Shopify store (pilot)</option>
               <option value="simulated">Simulated demo catalog</option>
             </select>
 
             {source === 'shopify_real' && (
-              <div className="space-y-2">
-                <div className="p-2 rounded border font-body text-[10px] text-ink-muted leading-relaxed" style={{ borderColor: 'var(--signal-indigo)', background: 'rgba(47,58,143,0.03)' }}>
-                  In your Shopify Dev Dashboard: Create app &rarr; grant <span className="font-data">read_products</span> scope &rarr; Install on store &rarr; copy Client ID and Client Secret. We exchange them for a temporary access token automatically.
-                </div>
-                <input
-                  type="text"
-                  value={shopDomain}
-                  onChange={e => setShopDomain(e.target.value)}
-                  placeholder="yourstore.myshopify.com"
-                  className="w-full text-sm font-data border rounded px-2 py-1.5 text-ink"
-                  style={{ borderColor: 'var(--ledger-line)' }}
+              <div className="space-y-2.5">
+                <input type="text" value={shopDomain} onChange={e => setShopDomain(e.target.value)}
+                  placeholder="yourstore.myshopify.com" className="font-data"
+                  style={{ width: '100%', fontSize: 13, border: '1.5px solid var(--ledger-line)', borderRadius: 6, padding: '9px 12px', color: 'var(--ink)', background: '#fff' }}
                 />
-                <input
-                  type="text"
-                  value={clientId}
-                  onChange={e => setClientId(e.target.value)}
-                  placeholder="Client ID"
-                  className="w-full text-sm font-data border rounded px-2 py-1.5 text-ink"
-                  style={{ borderColor: 'var(--ledger-line)' }}
+                <input type="text" value={clientId} onChange={e => setClientId(e.target.value)}
+                  placeholder="Client ID" className="font-data"
+                  style={{ width: '100%', fontSize: 13, border: '1.5px solid var(--ledger-line)', borderRadius: 6, padding: '9px 12px', color: 'var(--ink)', background: '#fff' }}
                 />
-                <input
-                  type="password"
-                  value={clientSecret}
-                  onChange={e => setClientSecret(e.target.value)}
-                  placeholder="Client Secret (shpss_...)"
-                  className="w-full text-sm font-body border rounded px-2 py-1.5 text-ink"
-                  style={{ borderColor: 'var(--ledger-line)' }}
+                <input type="password" value={clientSecret} onChange={e => setClientSecret(e.target.value)}
+                  placeholder="Client Secret (shpss_...)" className="font-body"
+                  style={{ width: '100%', fontSize: 13, border: '1.5px solid var(--ledger-line)', borderRadius: 6, padding: '9px 12px', color: 'var(--ink)', background: '#fff' }}
                 />
                 {shopError && (
-                  <p className="font-body text-xs text-seal-red font-medium">{shopError}</p>
+                  <p className="font-body" style={{ fontSize: 12, color: 'var(--seal-red)', fontWeight: 500 }}>{shopError}</p>
                 )}
-                <button
-                  onClick={handleShopifyConnect}
-                  disabled={importing}
-                  className="btn-primary w-full"
+                <button onClick={handleShopifyConnect} disabled={importing}
+                  style={{
+                    width: '100%', padding: '11px 0', borderRadius: 6, border: 'none',
+                    background: 'var(--signal-indigo)', color: '#fff',
+                    fontFamily: 'var(--font-body)', fontSize: 14, fontWeight: 600,
+                    cursor: importing ? 'not-allowed' : 'pointer', opacity: importing ? 0.6 : 1,
+                  }}
                 >
                   {importing ? 'Connecting...' : 'Connect Shopify Store'}
                 </button>
@@ -253,66 +285,86 @@ export default function MerchantOnboarding() {
             )}
 
             {source === 'simulated' && (
-              <button
-                onClick={handleSimulatedImport}
-                disabled={importing}
-                className="btn-primary w-full"
+              <button onClick={handleSimulatedImport} disabled={importing}
+                style={{
+                  width: '100%', padding: '11px 0', borderRadius: 6, border: 'none',
+                  background: 'var(--signal-indigo)', color: '#fff',
+                  fontFamily: 'var(--font-body)', fontSize: 14, fontWeight: 600,
+                  cursor: importing ? 'not-allowed' : 'pointer', opacity: importing ? 0.6 : 1,
+                }}
               >
-                {importing ? 'Importing...' : 'Load Demo Catalog (simulated)'}
+                {importing ? 'Importing...' : 'Load Demo Catalog'}
               </button>
             )}
           </div>
 
           {importResult && (
-            <p className="font-body text-xs text-signal-indigo mt-1.5 ml-7 font-medium">{importResult}</p>
+            <p className="font-body" style={{ fontSize: 12, color: 'var(--signal-indigo)', fontWeight: 600, marginTop: 10 }}>
+              {importResult}
+            </p>
           )}
-        </div>
 
-        {/* Step 2: Enable AI Agent Commerce */}
-        <div className="p-3 rounded border" style={{
-          borderColor: status.agent_commerce_enabled ? 'var(--seal-green)' : 'var(--ledger-line)',
-          background: status.agent_commerce_enabled ? 'rgba(31,111,74,0.04)' : 'transparent',
-        }}>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className={`seal ${status.agent_commerce_enabled ? 'seal-approved' : ''}`} style={{ width: 20, height: 20, fontSize: 10 }}>
+          {/* AI Transactability toggle — inline at the bottom */}
+          <div className="flex items-center justify-between" style={{ marginTop: 16, paddingTop: 14, borderTop: '1px solid var(--ledger-line)' }}>
+            <div className="flex items-center gap-2.5">
+              <div style={{
+                width: 28, height: 28, borderRadius: '50%',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 13, fontWeight: 700,
+                background: status.agent_commerce_enabled ? 'var(--seal-green)' : 'var(--signal-indigo)',
+                color: '#fff',
+              }}>
                 {status.agent_commerce_enabled ? '✓' : '2'}
               </div>
               <div>
-                <span className="font-body text-sm font-medium text-ink">Enable AI Agent Transactability</span>
-                <p className="font-body text-[10px] text-ink-muted mt-0.5">
-                  {status.agent_commerce_enabled
-                    ? 'AI agents can discover and transact with this merchant'
-                    : 'AI agent proposals will be denied with MERCHANT_NOT_OPTED_IN'}
+                <span className="font-body" style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink)' }}>
+                  AI Agent Transactability
+                </span>
+                <p className="font-body" style={{ fontSize: 11, color: 'var(--ink-muted)', marginTop: 1 }}>
+                  {status.agent_commerce_enabled ? 'Agents can transact' : 'Agents will be denied'}
                 </p>
               </div>
             </div>
             <button
               onClick={handleToggle}
               disabled={toggling}
-              className="relative w-11 h-6 rounded-full transition-colors flex-shrink-0"
-              style={{ background: status.agent_commerce_enabled ? 'var(--seal-green)' : 'var(--ledger-line)' }}
+              style={{
+                position: 'relative', width: 44, height: 24, borderRadius: 12,
+                border: 'none', cursor: toggling ? 'not-allowed' : 'pointer',
+                background: status.agent_commerce_enabled ? 'var(--seal-green)' : 'var(--ledger-line)',
+                transition: 'background 0.3s', flexShrink: 0,
+              }}
             >
-              <span className="absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform"
-                    style={{ left: status.agent_commerce_enabled ? '22px' : '2px' }} />
+              <span style={{
+                position: 'absolute', top: 2, width: 20, height: 20,
+                borderRadius: '50%', background: '#fff',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.15)',
+                transition: 'left 0.25s cubic-bezier(0.4,0,0.2,1)',
+                left: status.agent_commerce_enabled ? 22 : 2,
+              }} />
             </button>
           </div>
+
+          {/* Shopify instructions — at the very bottom */}
+          {source === 'shopify_real' && (
+            <p className="font-body" style={{ fontSize: 11, color: 'var(--ink-muted)', marginTop: 12, lineHeight: 1.5 }}>
+              In your Shopify Dev Dashboard: Create app &rarr; grant <span className="font-data" style={{ fontSize: 10 }}>read_products</span> scope &rarr; Install on store &rarr; copy Client ID and Client Secret. We exchange them for a temporary access token automatically.
+            </p>
+          )}
         </div>
 
-        {/* Footer note */}
-        <div className="pt-3 border-t" style={{ borderColor: 'var(--ledger-line)' }}>
-          <p className="font-body text-[10px] text-ink-muted leading-relaxed">
-            {hasShopifyConnection ? (
-              <>
-                <span className="font-medium text-seal-green">Live Shopify catalog connected.</span> Product data is real and synced from the merchant's store. Checkout uses Razorpay test mode — no real funds are transferred.
-              </>
-            ) : (
-              <>
-                <span className="font-medium text-ink">Simulated catalog</span> — to connect a real store, select "Connect a real Shopify store" above. A production version uses the platform's existing Shopify app OAuth flow.
-              </>
-            )}
-          </p>
-        </div>
+        {/* Footer */}
+        <p className="font-body" style={{ fontSize: 11, color: 'var(--ink-muted)', lineHeight: 1.5 }}>
+          {hasShopifyConnection ? (
+            <>
+              <span style={{ fontWeight: 600, color: 'var(--seal-green)' }}>Live Shopify catalog connected.</span>{' '}
+            </>
+          ) : (
+            <>
+              <span style={{ fontWeight: 500 }}>Simulated catalog</span> — select "Connect a real Shopify store" above to use live product data.
+            </>
+          )}
+        </p>
       </div>
     </div>
   );

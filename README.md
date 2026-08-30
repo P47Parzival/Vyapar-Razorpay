@@ -28,12 +28,13 @@ Live website: <br>
 14. [The Dashboard](#14-the-dashboard)
 15. [Real-World Evidence and Rollout Path](#15-real-world-evidence-and-rollout-path)
 16. [Tech Stack](#16-tech-stack)
+17. [Setup instruction](#17-setup-instruction)
 
 ## 1. What Vyapar Is (GoKwik Insipred, )
 
 ![Vyapar Banner](assets/Vyapar_arch.png)
 <p align="center">
-  <img src="assets/Vyapar_nutshell.png" alt="Vyapar Nutshell" />
+  <img src="assets/Vyapar_Nutshell.png" alt="Vyapar Nutshell" />
 </p>
  
 Vyapar answers both halves of the problem statement's title, not just one.
@@ -449,6 +450,58 @@ being finalized  which is stated here as exactly what it is, not oversold as mor
 | **Frontend Dashboard** | React, Vite, TailwindCSS, Framer Motion |
 | **Tooling** | esbuild, Vite, tsc, concurrently |
 | **Pilot** | Shopify |
+
+
+
+---
+
+## 17. Quick Setup
+
+**Prerequisites:** Node.js v18+ and npm.
+
+```bash
+git clone https://github.com/P47Parzival/Vyapar.git
+cd Vyapar
+npm start
+```
+Wait for the build to complete and open http://localhost:5173/
+
+
+```bash
+cp .env.example .env
+```
+
+| Variable | Required For | Where to Get |
+| :--- | :--- | :--- |
+| `RAZORPAY_KEY_ID` | Payments (test mode) | [Razorpay Dashboard](https://dashboard.razorpay.com) → Settings → API Keys |
+| `RAZORPAY_KEY_SECRET` | Payments (test mode) | Same as above |
+| `BEDROCK_API_KEY` | AI agents (Growth, Buyer) | AWS Bedrock console |
+| `AWS_REGION` | AI agents | Default: `ap-south-1` |
+
+> The dashboard UI works fully without these — you can explore the interface, view the ledger, manage policies and mandates. AI agent triggers and payment features require valid credentials.
+
+### Claude Desktop MCP Setup (Optional)
+
+To use Vyapar as an MCP server inside Claude Desktop (for in-app checkout):
+
+1. Open Claude Desktop → Settings → Developer → Edit Config
+2. Add to `mcpServers`:
+
+```json
+{
+  "mcpServers": {
+    "vyapar": {
+      "command": "npx",
+      "args": ["tsx", "packages/server/src/mcp-server/mcp-stdio.ts"],
+      "cwd": "/path/to/Vyapar"
+    }
+  }
+}
+```
+
+3. Restart Claude Desktop. Vyapar tools (`browse_catalog`, `submit_purchase_proposal`, etc.) will appear automatically.
+
+Alternatively, on **Windows** run `setup.bat` or on **Mac/Linux** run `bash setup.sh` — these scripts handle install, environment setup, and print MCP config instructions.
 
 
 

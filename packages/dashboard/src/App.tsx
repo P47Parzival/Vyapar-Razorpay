@@ -12,7 +12,7 @@ import CatalogAudit from './components/CatalogAudit';
 import ProductsCatalog from './components/ProductsCatalog';
 import './dashboard.css';
 
-type Tab = 'dashboard' | 'connect' | 'products';
+type Tab = 'dashboard' | 'connect' | 'products' | 'catalog-confidence';
 
 function App() {
   const navigate = useNavigate();
@@ -22,6 +22,7 @@ function App() {
     { key: 'dashboard', label: 'Dashboard' },
     { key: 'connect', label: 'Connect' },
     { key: 'products', label: 'Products' },
+    { key: 'catalog-confidence', label: 'Catalog Confidence' },
   ];
 
   return (
@@ -91,28 +92,29 @@ function App() {
 
         {activeTab === 'connect' && (
           <>
-            {/* Mandates + Policy Controls */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <MandatePanel />
-              <PolicyPanel />
-            </div>
-
             {/* Merchant Setup + Protocol Surface */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <MerchantOnboarding />
               <AgentAccessPanel />
             </div>
 
+            {/* Mandates + Policy Controls */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <MandatePanel />
+              <PolicyPanel />
+            </div>
+
             {/* Growth Agent + AI Buyer Agent */}
             <AgentTriggers />
-
-            {/* Catalog Legibility */}
-            <CatalogAudit />
           </>
         )}
 
         {activeTab === 'products' && (
           <ProductsCatalog />
+        )}
+
+        {activeTab === 'catalog-confidence' && (
+          <CatalogAudit />
         )}
       </main>
     </div>
