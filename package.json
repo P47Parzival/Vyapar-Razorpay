@@ -19,5 +19,8 @@
   },
   "dependencies": {
     "esbuild": "^0.28.2"
+  },
+  "engines": {
+    "node": "22.x"
   }
 }
