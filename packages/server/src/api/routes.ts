@@ -207,6 +207,36 @@ router.get('/categories', (_req, res) => {
   res.json({ categories: rows.map(r => r.category) });
 });
 
+router.get('/catalog-dashboard', (req, res) => {
+  const category = req.query.category as string | undefined;
+  const search = req.query.search as string | undefined;
+  const activeOnly = req.query.active !== '0';
+
+  let sql = 'SELECT * FROM catalog_items';
+  const conditions: string[] = [];
+  const params: any[] = [];
+
+  if (activeOnly) {
+    conditions.push('is_active = 1');
+  }
+  if (category) {
+    conditions.push('category = ?');
+    params.push(category);
+  }
+  if (search) {
+    conditions.push('(title LIKE ? OR description LIKE ?)');
+    params.push(`%${search}%`, `%${search}%`);
+  }
+
+  if (conditions.length > 0) {
+    sql += ' WHERE ' + conditions.join(' AND ');
+  }
+  sql += ' ORDER BY category, title';
+
+  const items = db.prepare(sql).all(...params);
+  res.json({ items, count: (items as any[]).length });
+});
+
 // --- Onboarding endpoints ---
 
 router.get('/onboarding/status', (_req, res) => {

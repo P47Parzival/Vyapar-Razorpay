@@ -1,38 +1,133 @@
 /* ═══════════════════════════════════════════════════════
-   Vyapar Dashboard — Premium Light Theme
+   Vyapar Dashboard — "The Ledger, Not the Console"
    ═══════════════════════════════════════════════════════ */
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;0,9..144,700;1,9..144,400&family=Inter+Tight:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap');
+
+:root {
+  --paper: #FAF9F6;
+  --ink: #1C1D1F;
+  --ink-muted: #5B5D63;
+  --ledger-line: #DEDBD3;
+  --seal-green: #1F6F4A;
+  --seal-red: #A23B2E;
+  --signal-indigo: #2F3A8F;
+
+  --font-display: 'Fraunces', Georgia, serif;
+  --font-body: 'Inter Tight', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-data: 'IBM Plex Mono', 'Menlo', monospace;
+}
 
 body:has(.dashboard-root) {
-  background: #F7F8FA !important;
+  background: var(--paper) !important;
 }
 
 .dashboard-root {
   min-height: 100vh;
-  background: #F7F8FA;
-  color: #1a202c;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
 }
 
 .dashboard-root * {
   font-family: inherit;
 }
 
-/* ─── Header ─── */
+/* ─── Typography utilities ─── */
+.font-display { font-family: var(--font-display); }
+.font-body { font-family: var(--font-body); }
+.font-data { font-family: var(--font-data); }
+
+/* ─── Color utilities ─── */
+.text-ink { color: var(--ink); }
+.text-ink-muted { color: var(--ink-muted); }
+.text-seal-green { color: var(--seal-green); }
+.text-seal-red { color: var(--seal-red); }
+.text-signal-indigo { color: var(--signal-indigo); }
+.bg-paper { background: var(--paper); }
+.border-ledger { border-color: var(--ledger-line); }
+
+/* ─── Header / Masthead ─── */
 .dashboard-header {
-  background: #FFFFFF;
-  border-bottom: 1px solid #E8ECF1;
+  background: var(--paper);
+  border-bottom: 1px solid var(--ledger-line);
   position: sticky;
   top: 0;
   z-index: 50;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
 }
 
-/* ─── Card soft shadows ─── */
-.dashboard-root .shadow {
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06),
-              0 1px 2px rgba(0, 0, 0, 0.03) !important;
+/* ─── Register sections ─── */
+.register {
+  background: #FFFFFF;
+  border: 1px solid var(--ledger-line);
+  border-radius: 6px;
+}
+
+.register-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--ledger-line);
+}
+
+.register-header h2 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 1.15rem;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+}
+
+.register-body {
+  padding: 16px 20px;
+}
+
+/* ─── Seal stamps ─── */
+.seal {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 13px;
+  font-weight: 600;
+  border-width: 2px;
+  border-style: solid;
+}
+
+.seal-approved {
+  border-color: var(--seal-green);
+  color: var(--seal-green);
+  background: rgba(31, 111, 74, 0.06);
+}
+
+.seal-denied {
+  border-color: var(--seal-red);
+  color: var(--seal-red);
+  background: rgba(162, 59, 46, 0.06);
+}
+
+.seal-error {
+  border-color: #B8860B;
+  color: #B8860B;
+  background: rgba(184, 134, 11, 0.06);
+}
+
+/* ─── Ledger rows ─── */
+.ledger-row {
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--ledger-line);
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+
+.ledger-row:hover {
+  background: rgba(0, 0, 0, 0.015);
+}
+
+.ledger-row:last-child {
+  border-bottom: none;
 }
 
 /* ─── Input focus ─── */
@@ -43,56 +138,44 @@ body:has(.dashboard-root) {
 
 .dashboard-root input:focus,
 .dashboard-root select:focus {
-  border-color: #6366F1 !important;
-  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1) !important;
+  border-color: var(--signal-indigo) !important;
+  box-shadow: 0 0 0 3px rgba(47, 58, 143, 0.08) !important;
   outline: none;
 }
 
-/* ─── Button / interactive transitions ─── */
+/* ─── Button base ─── */
 .dashboard-root button {
   transition: all 0.15s ease;
 }
 
-/* ─── Hover refinement ─── */
-.dashboard-root .hover\:bg-gray-50:hover {
-  background: #F1F5F9 !important;
+.btn-primary {
+  background: var(--signal-indigo);
+  color: #fff;
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 0.8125rem;
+  padding: 7px 14px;
+  border-radius: 4px;
+  border: none;
+  cursor: pointer;
 }
 
-/* ─── Grid cards stretch to equal height ─── */
-.dashboard-grid-stretch {
-  align-items: stretch;
+.btn-primary:hover { opacity: 0.9; }
+.btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.btn-secondary {
+  background: transparent;
+  color: var(--ink-muted);
+  font-family: var(--font-body);
+  font-weight: 500;
+  font-size: 0.75rem;
+  padding: 5px 10px;
+  border-radius: 4px;
+  border: 1px solid var(--ledger-line);
+  cursor: pointer;
 }
 
-.dashboard-grid-stretch > * {
-  min-height: 100%;
-}
-
-/* ─── Right sidebar compact ─── */
-.dashboard-sidebar .px-4 {
-  padding-left: 0.75rem !important;
-  padding-right: 0.75rem !important;
-}
-
-.dashboard-sidebar .py-3 {
-  padding-top: 0.5rem !important;
-  padding-bottom: 0.5rem !important;
-}
-
-.dashboard-sidebar .p-4 {
-  padding: 0.75rem !important;
-}
-
-.dashboard-sidebar .space-y-3 > * + * {
-  margin-top: 0.5rem !important;
-}
-
-.dashboard-sidebar .space-y-2\.5 > * + * {
-  margin-top: 0.5rem !important;
-}
-
-.dashboard-sidebar h2 {
-  font-size: 0.875rem !important;
-}
+.btn-secondary:hover { background: rgba(0,0,0,0.03); }
 
 /* ─── Scrollbar ─── */
 .dashboard-root ::-webkit-scrollbar {
@@ -102,9 +185,26 @@ body:has(.dashboard-root) {
   background: transparent;
 }
 .dashboard-root ::-webkit-scrollbar-thumb {
-  background: #D1D5DB;
+  background: var(--ledger-line);
   border-radius: 3px;
 }
 .dashboard-root ::-webkit-scrollbar-thumb:hover {
-  background: #9CA3AF;
+  background: var(--ink-muted);
+}
+
+/* ─── Animations ─── */
+@keyframes seal-appear {
+  from { transform: scale(0.6); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+.seal-animate {
+  animation: seal-appear 0.25s ease-out;
+}
+
+/* ─── Responsive ─── */
+@media (max-width: 768px) {
+  .register-header { padding: 12px 16px; }
+  .register-body { padding: 12px 16px; }
+  .ledger-row { padding: 10px 16px; }
 }

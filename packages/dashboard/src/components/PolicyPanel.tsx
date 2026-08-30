@@ -107,10 +107,10 @@ export default function PolicyPanel() {
     }
   };
 
-  if (!policy) return <div className="bg-white rounded-lg shadow border border-gray-200 p-4 animate-pulse">Loading policy...</div>;
+  if (!policy) return <div className="register p-4 animate-pulse font-body text-sm text-ink-muted">Loading policy...</div>;
 
-  const fields: { key: keyof EditState; label: string; prefix?: string; suffix?: string; highlight?: boolean }[] = [
-    { key: 'max_per_transaction', label: 'Per-Transaction Cap', prefix: '₹', highlight: true },
+  const fields: { key: keyof EditState; label: string; prefix?: string; suffix?: string; hint?: string }[] = [
+    { key: 'max_per_transaction', label: 'Per-Transaction Cap', prefix: '₹', hint: 'Lower this below a product price, then run the buyer agent to demo a graceful denial' },
     { key: 'max_daily_velocity', label: 'Daily Velocity Cap', prefix: '₹' },
     { key: 'max_daily_txn_count', label: 'Daily Txn Limit' },
     { key: 'discount_ceiling_pct', label: 'Discount Ceiling', suffix: '%' },
@@ -118,67 +118,57 @@ export default function PolicyPanel() {
   ];
 
   return (
-    <div className="bg-white rounded-lg shadow border border-gray-200">
-      <div className="px-4 py-3 border-b border-gray-200">
-        <h2 className="text-lg font-semibold text-gray-900">Policy Controls</h2>
-        <p className="text-xs text-gray-500 mt-0.5">Live-editable merchant policy — changes take effect immediately</p>
+    <div className="register">
+      <div className="register-header">
+        <h2>Policy Controls</h2>
+        <p className="font-body text-xs text-ink-muted mt-0.5">Live-editable — changes take effect immediately</p>
       </div>
 
-      <div className="p-4 space-y-3">
-        {fields.map(({ key, label, prefix, suffix, highlight }) => (
-          <div
-            key={key}
-            className={`p-3 rounded-lg border ${
-              highlight ? 'bg-blue-50 border-blue-200' : 'bg-gray-50 border-gray-200'
-            }`}
-          >
-            <label className={`block text-xs font-medium mb-1 ${
-              highlight ? 'text-blue-900' : 'text-gray-700'
-            }`}>
+      <div className="register-body space-y-3">
+        {fields.map(({ key, label, prefix, suffix, hint }) => (
+          <div key={key} className="py-2">
+            <label className="block font-body text-[11px] font-medium text-ink-muted uppercase tracking-wider mb-1.5">
               {label}
             </label>
             <div className="flex items-center gap-2">
-              {prefix && <span className={`text-sm ${highlight ? 'text-blue-700' : 'text-gray-500'}`}>{prefix}</span>}
+              {prefix && <span className="font-data text-sm text-ink-muted">{prefix}</span>}
               <input
                 type="number"
                 value={edit[key]}
                 onChange={(e) => setEdit({ ...edit, [key]: e.target.value })}
-                className={`w-24 px-2 py-1 border rounded text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                  highlight ? 'border-blue-300' : 'border-gray-300'
-                }`}
+                className="w-24 px-2 py-1.5 border rounded text-sm font-data text-ink"
+                style={{ borderColor: 'var(--ledger-line)' }}
                 min="0"
               />
-              {suffix && <span className="text-sm text-gray-500">{suffix}</span>}
+              {suffix && <span className="font-body text-xs text-ink-muted">{suffix}</span>}
               <button
                 onClick={() => handleUpdate(key)}
                 disabled={saving}
-                className="px-2.5 py-1 bg-blue-600 text-white text-xs font-medium rounded hover:bg-blue-700 transition-colors disabled:opacity-50"
+                className="btn-primary text-xs px-2.5 py-1"
               >
                 {saving ? '...' : 'Save'}
               </button>
               {successField === key && (
-                <span className="text-xs text-green-600 font-medium">Updated!</span>
+                <span className="font-body text-xs text-seal-green font-medium">Updated</span>
               )}
             </div>
-            {highlight && (
-              <p className="text-xs text-blue-600 mt-1">
-                Lower this below a product price, then run the buyer agent to demo a graceful denial
-              </p>
+            {hint && (
+              <p className="font-body text-[11px] text-ink-muted mt-1 leading-relaxed">{hint}</p>
             )}
           </div>
         ))}
 
         {/* Allowed categories */}
-        <div className="pt-2">
-          <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Allowed Categories</p>
+        <div className="pt-2 border-t" style={{ borderColor: 'var(--ledger-line)' }}>
+          <p className="font-body text-[10px] text-ink-muted uppercase tracking-wider mb-1.5">Allowed Categories</p>
           <div className="flex flex-wrap gap-1">
             {policy.category_allowlist.length === 0 ? (
-              <span className="text-xs px-2 py-0.5 bg-green-50 text-green-700 border border-green-200 rounded">
+              <span className="font-body text-xs px-2 py-0.5 rounded border text-seal-green" style={{ borderColor: 'var(--seal-green)', background: 'rgba(31,111,74,0.04)' }}>
                 All categories
               </span>
             ) : (
               policy.category_allowlist.map((cat) => (
-                <span key={cat} className="text-xs px-2 py-0.5 bg-green-50 text-green-700 border border-green-200 rounded">
+                <span key={cat} className="font-body text-xs px-2 py-0.5 rounded border text-ink-muted" style={{ borderColor: 'var(--ledger-line)' }}>
                   {cat}
                 </span>
               ))

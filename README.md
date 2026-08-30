@@ -239,6 +239,41 @@ Vyapar/
 
 ---
 
+## Catalog Legibility: Does Our Agent Actually See Every Product?
+
+Everything built so far assumes that if a product is in the catalog and the checkout mechanism works, an agent will fairly consider it. We tested whether that's actually true.
+
+### What we ran
+
+6 natural-language shopping goals (skincare, wellness, casual clothing, tech gadget, birthday gift under ₹1,500, haircare), each run 10 times against the full 33-item active catalog (15 seeded demo items + 18 live Shopify-sourced items), using Claude Sonnet 4.6 via AWS Bedrock. The catalog order was randomly shuffled before each trial to control for position effects. 60 total trials, batch `batch_1787990762535_8bb168`.
+
+### What we found
+
+**Strong item concentration**: across all 6 goals, only 11 distinct items were ever picked out of 33 available. The remaining 22 items were never once selected across any goal.
+
+Notable patterns (raw counts, not percentages alone):
+
+- **"Casual clothing"**: Classic Cotton Crew T-Shirt picked 10/10. The only other in-stock clothing item — Slim Fit Denim Jeans (₹1,299) — was shown every trial and never once chosen
+- **"Tech gadget"**: Premium Ball Pen Set picked 10/10 — categorized as `pen_set`, not a tech product. No actual tech items (keyboard, mouse, speaker, earbuds, smartwatch) were in the trial catalog (all had stock = 0 at run time), so the agent chose the closest match it could find from what was available — and locked onto it every trial
+- **"Haircare"**: Anti-Dandruff Shampoo 5/10, Hair Growth Oil 5/10 — the Nourishing Conditioner (same category, ₹420, similar price) was shown every trial and picked 0/10
+- **"Wellness/fitness"**: Ashwagandha Capsules 8/10, Multivitamin Gummies 2/10 — Collagen Powder (₹1,250, same wellness category) was shown every trial and never picked
+- **"Skincare daily"**: Daily Moisturizer SPF 30 7/10, Gentle Face Wash 3/10 — Vitamin C Serum (₹890) and Hydrating Toner (₹550), both skincare and in-stock, were shown every trial and picked 0/10
+- **"Gift under ₹1,500"**: Bamboo Makeup Brush Set 6/10, Jade Face Roller 3/10, Vitamin C Serum 1/10 — 30 of 33 in-stock items never considered
+
+**No strong position bias**: catalog order was shuffled each trial. Across all goals, picks distributed roughly evenly across the top, middle, and bottom thirds of the presented list — the agent was not simply choosing whatever appeared first.
+
+### What this means for the merchant
+
+If you're a merchant relying on an AI agent to surface your products, a significant portion of your catalog may be effectively invisible — not because the agent can't see the items (they're in every request), but because the agent consistently favors certain items over others. This is the catalog legibility problem, and it's real even at this small sample size.
+
+### Scope and limits
+
+This is a small, one-time, single-model measurement, directly inspired by rigorous agent-behavior-auditing work happening elsewhere in this space — full statistical validation (multi-model, bootstrap confidence intervals, hundreds of trials, a planted-bias validation suite) is a legitimate, larger project of its own that we scoped out of this build given the time available. What's here is honest and real at the sample size it was run at, not a substitute for that larger rigor.
+
+The dashboard includes a "Catalog Legibility Check" panel showing these results, clearly labeled as a one-time measurement with the sample size stated next to every number.
+
+---
+
 ## Honesty Notes
 
 - **Not a full protocol implementation**: We publish a `.well-known` manifest and an MCP server in the *spirit* of UCP/ACP discovery conventions. We do not claim spec compliance.

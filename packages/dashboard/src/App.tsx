@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import LedgerFeed from './components/LedgerFeed';
 import OrdersAndCustomers from './components/OrdersAndCustomers';
@@ -8,60 +9,111 @@ import AgentAccessPanel from './components/AgentAccessPanel';
 import MandatePanel from './components/MandatePanel';
 import MerchantOnboarding from './components/MerchantOnboarding';
 import CatalogAudit from './components/CatalogAudit';
+import ProductsCatalog from './components/ProductsCatalog';
 import './dashboard.css';
+
+type Tab = 'dashboard' | 'connect' | 'products';
 
 function App() {
   const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState<Tab>('dashboard');
+
+  const tabs: { key: Tab; label: string }[] = [
+    { key: 'dashboard', label: 'Dashboard' },
+    { key: 'connect', label: 'Connect' },
+    { key: 'products', label: 'Products' },
+  ];
 
   return (
     <div className="dashboard-root">
+      {/* Masthead */}
       <header className="dashboard-header">
         <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <button
               onClick={() => navigate('/')}
-              className="text-sm text-gray-400 hover:text-gray-800 transition-colors"
+              className="text-ink-muted hover:text-ink transition-colors text-sm"
             >
               &larr;
             </button>
-            <h1 className="text-lg font-bold text-gray-900">Vyapar</h1>
-            <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 font-medium">
+            <img src="/assets/vyapar_logo.png" alt="Vyapar" className="h-10" />
+            <span className="font-data text-[10px] px-2 py-0.5 rounded border border-ledger text-ink-muted">
               TEST MODE
             </span>
-            <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-600 border border-indigo-200 font-medium">
+            <span className="font-data text-[10px] px-2 py-0.5 rounded border border-ledger text-signal-indigo">
               MCP
             </span>
           </div>
-          <p className="text-xs text-gray-400 font-medium hidden sm:block">
+          <p className="font-body text-xs text-ink-muted hidden sm:block tracking-wide">
             Agentic Commerce Dashboard
           </p>
         </div>
+
+        {/* Tab navigation */}
+        <nav className="max-w-7xl mx-auto px-4">
+          <div className="flex items-center gap-0 border-b" style={{ borderColor: 'var(--ledger-line)' }}>
+            {tabs.map(tab => (
+              <button
+                key={tab.key}
+                onClick={() => setActiveTab(tab.key)}
+                className={`font-body text-sm px-4 py-2.5 transition-colors relative ${activeTab === tab.key
+                    ? 'text-ink font-medium'
+                    : 'text-ink-muted hover:text-ink'
+                  }`}
+              >
+                {tab.label}
+                {activeTab === tab.key && (
+                  <span className="absolute bottom-0 left-0 right-0 h-[2px]" style={{ background: 'var(--signal-indigo)' }} />
+                )}
+              </button>
+            ))}
+          </div>
+        </nav>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 py-6 space-y-6">
-        <RevenueCounter />
+      <main className="max-w-7xl mx-auto px-4 py-6 space-y-8">
+        {activeTab === 'dashboard' && (
+          <>
+            {/* Summary Strip */}
+            <RevenueCounter />
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2">
-            <LedgerFeed />
-          </div>
-          <div className="space-y-4 dashboard-sidebar">
-            <MerchantOnboarding />
-            <MandatePanel />
-          </div>
-        </div>
+            {/* Ledger + Orders & Customers */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6" style={{ height: '680px' }}>
+              <div className="lg:col-span-2 flex flex-col min-h-0">
+                <LedgerFeed />
+              </div>
+              <div className="flex flex-col min-h-0">
+                <OrdersAndCustomers />
+              </div>
+            </div>
+          </>
+        )}
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <OrdersAndCustomers />
-          <PolicyPanel />
-        </div>
+        {activeTab === 'connect' && (
+          <>
+            {/* Mandates + Policy Controls */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <MandatePanel />
+              <PolicyPanel />
+            </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <AgentAccessPanel />
-          <AgentTriggers />
-        </div>
+            {/* Merchant Setup + Protocol Surface */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <MerchantOnboarding />
+              <AgentAccessPanel />
+            </div>
 
-        <CatalogAudit />
+            {/* Growth Agent + AI Buyer Agent */}
+            <AgentTriggers />
+
+            {/* Catalog Legibility */}
+            <CatalogAudit />
+          </>
+        )}
+
+        {activeTab === 'products' && (
+          <ProductsCatalog />
+        )}
       </main>
     </div>
   );

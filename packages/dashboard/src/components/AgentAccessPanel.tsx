@@ -16,77 +16,39 @@ export default function AgentAccessPanel() {
     setTimeout(() => setCopied(null), 2000);
   };
 
+  const endpoints = [
+    { key: 'mcp', label: 'MCP Endpoint', value: mcpEndpoint },
+    { key: 'manifest', label: 'Discovery Manifest', value: manifestUrl },
+    { key: 'webhook', label: 'Webhook Receiver', value: webhookEndpoint },
+    { key: 'buyer', label: 'External Buyer Agent', value: externalBuyerCmd },
+  ];
+
   return (
-    <div className="bg-white rounded-lg shadow border border-gray-200">
-      <div className="px-4 py-3 border-b border-gray-200">
-        <h2 className="text-lg font-semibold text-gray-900">Protocol Surface</h2>
-        <p className="text-xs text-gray-500 mt-0.5">Discoverable + transactable by any external AI agent</p>
+    <div className="register">
+      <div className="register-header">
+        <h2>Protocol Surface</h2>
+        <p className="font-body text-xs text-ink-muted mt-0.5">Discoverable + transactable by any external AI agent</p>
       </div>
 
-      <div className="p-4 space-y-2.5">
-        <div className="p-2.5 bg-indigo-50 border border-indigo-200 rounded-lg">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-[10px] text-indigo-500 uppercase tracking-wider font-medium">MCP Endpoint</p>
-              <p className="text-xs font-mono text-indigo-900 mt-0.5">{mcpEndpoint}</p>
+      <div className="register-body space-y-2">
+        {endpoints.map(({ key, label, value }) => (
+          <div key={key} className="flex items-center justify-between py-2.5 px-3 rounded border" style={{ borderColor: 'var(--ledger-line)' }}>
+            <div className="min-w-0 flex-1 mr-3">
+              <p className="font-body text-[10px] text-ink-muted uppercase tracking-wider font-medium">{label}</p>
+              <p className="font-data text-xs text-ink mt-0.5 truncate">{value}</p>
             </div>
             <button
-              onClick={() => copyToClipboard(mcpEndpoint, 'mcp')}
-              className="px-2 py-1 text-[10px] bg-indigo-600 text-white rounded hover:bg-indigo-700 transition-colors"
+              onClick={() => copyToClipboard(value, key)}
+              className="btn-primary text-[10px] px-2 py-1 flex-shrink-0"
             >
-              {copied === 'mcp' ? 'Copied!' : 'Copy'}
+              {copied === key ? 'Copied!' : 'Copy'}
             </button>
           </div>
-        </div>
+        ))}
 
-        <div className="p-2.5 bg-gray-50 border border-gray-200 rounded-lg">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-[10px] text-gray-500 uppercase tracking-wider font-medium">Discovery Manifest</p>
-              <p className="text-xs font-mono text-gray-900 mt-0.5">{manifestUrl}</p>
-            </div>
-            <button
-              onClick={() => copyToClipboard(manifestUrl, 'manifest')}
-              className="px-2 py-1 text-[10px] bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors"
-            >
-              {copied === 'manifest' ? 'Copied!' : 'Copy'}
-            </button>
-          </div>
-        </div>
-
-        <div className="p-2.5 bg-purple-50 border border-purple-200 rounded-lg">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-[10px] text-purple-500 uppercase tracking-wider font-medium">Webhook Receiver</p>
-              <p className="text-xs font-mono text-purple-900 mt-0.5">{webhookEndpoint}</p>
-            </div>
-            <button
-              onClick={() => copyToClipboard(webhookEndpoint, 'webhook')}
-              className="px-2 py-1 text-[10px] bg-purple-600 text-white rounded hover:bg-purple-700 transition-colors"
-            >
-              {copied === 'webhook' ? 'Copied!' : 'Copy'}
-            </button>
-          </div>
-        </div>
-
-        <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-lg">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-[10px] text-emerald-600 uppercase tracking-wider font-medium">External Buyer Agent</p>
-              <p className="text-xs font-mono text-emerald-900 mt-0.5">{externalBuyerCmd}</p>
-            </div>
-            <button
-              onClick={() => copyToClipboard(externalBuyerCmd, 'buyer')}
-              className="px-2 py-1 text-[10px] bg-emerald-600 text-white rounded hover:bg-emerald-700 transition-colors"
-            >
-              {copied === 'buyer' ? 'Copied!' : 'Copy'}
-            </button>
-          </div>
-        </div>
-
-        <div className="text-[10px] text-gray-400 leading-relaxed">
+        <p className="font-body text-[10px] text-ink-muted leading-relaxed pt-1">
           Any MCP client (Claude Desktop, Claude Code, or a standalone agent) can discover, browse, and transact — bounded by the same 6-check policy gateway. The external buyer demo runs from a separate process with zero shared code.
-        </div>
+        </p>
       </div>
     </div>
   );

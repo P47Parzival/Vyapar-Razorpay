@@ -21,11 +21,11 @@ interface Customer {
   order_count: number;
 }
 
-const SOURCE_BADGES: Record<string, { label: string; classes: string }> = {
-  internal_growth_agent: { label: 'GROWTH', classes: 'bg-orange-50 text-orange-700 border-orange-200' },
-  internal_buyer_agent: { label: 'BUYER', classes: 'bg-blue-50 text-blue-700 border-blue-200' },
-  external_mcp_client: { label: 'MCP EXTERNAL', classes: 'bg-cyan-50 text-cyan-700 border-cyan-200' },
-  webhook: { label: 'WEBHOOK', classes: 'bg-purple-50 text-purple-700 border-purple-200' },
+const SOURCE_LABELS: Record<string, string> = {
+  internal_growth_agent: 'Growth Agent',
+  internal_buyer_agent: 'Buyer Agent',
+  external_mcp_client: 'MCP External',
+  webhook: 'Webhook',
 };
 
 interface OrderGroup {
@@ -76,96 +76,92 @@ export default function OrdersAndCustomers() {
     return () => clearInterval(interval);
   }, []);
 
-  const getSourceBadge = (source: string) => {
-    const badge = SOURCE_BADGES[source] || { label: source, classes: 'bg-gray-50 text-gray-700 border-gray-200' };
-    return (
-      <span className={`text-[10px] px-1.5 py-0.5 rounded border font-medium ${badge.classes}`}>
-        {badge.label}
-      </span>
-    );
-  };
-
   return (
-    <div className="bg-white rounded-lg shadow border border-gray-200 flex flex-col h-full">
-      <div className="px-4 py-3 border-b border-gray-200">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-lg font-semibold text-gray-900">Merchant Data</h2>
-            <p className="text-xs text-gray-500 mt-0.5">Orders & customers — owned entirely by the merchant, regardless of source</p>
-          </div>
-          <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-0.5">
-            <button
-              onClick={() => setTab('orders')}
-              className={`px-2.5 py-1 text-xs rounded-md transition-colors ${tab === 'orders' ? 'bg-white shadow text-gray-900 font-medium' : 'text-gray-500'}`}
-            >
-              Orders ({orders.length})
-            </button>
-            <button
-              onClick={() => setTab('customers')}
-              className={`px-2.5 py-1 text-xs rounded-md transition-colors ${tab === 'customers' ? 'bg-white shadow text-gray-900 font-medium' : 'text-gray-500'}`}
-            >
-              Customers ({customers.length})
-            </button>
-          </div>
+    <div className="register flex flex-col h-full">
+      <div className="register-header flex items-center justify-between">
+        <div>
+          <h2>Orders & Customers</h2>
+          <p className="font-body text-xs text-ink-muted mt-0.5">Merchant-owned data, regardless of source</p>
+        </div>
+        <div className="flex items-center gap-1 p-0.5 rounded border" style={{ borderColor: 'var(--ledger-line)' }}>
+          <button
+            onClick={() => setTab('orders')}
+            className={`font-body px-2.5 py-1 text-xs rounded transition-colors ${
+              tab === 'orders'
+                ? 'bg-white font-medium text-ink'
+                : 'text-ink-muted'
+            }`}
+            style={tab === 'orders' ? { boxShadow: '0 1px 2px rgba(0,0,0,0.06)' } : {}}
+          >
+            Orders ({orders.length})
+          </button>
+          <button
+            onClick={() => setTab('customers')}
+            className={`font-body px-2.5 py-1 text-xs rounded transition-colors ${
+              tab === 'customers'
+                ? 'bg-white font-medium text-ink'
+                : 'text-ink-muted'
+            }`}
+            style={tab === 'customers' ? { boxShadow: '0 1px 2px rgba(0,0,0,0.06)' } : {}}
+          >
+            Customers ({customers.length})
+          </button>
         </div>
       </div>
 
-      <div className="p-3 flex-1 overflow-y-auto min-h-0">
+      <div className="register-body flex-1 overflow-y-auto min-h-0">
         {tab === 'orders' && (
           orders.length === 0 ? (
-            <p className="text-sm text-gray-400 text-center py-6">No orders yet — run a purchase through any entry point</p>
+            <p className="font-body text-sm text-ink-muted text-center py-8">No orders yet — run a purchase through any entry point</p>
           ) : (
             <div className="space-y-2">
               {buildOrderGroups(orders).map(group => (
-                <div key={group.base.id} className={`rounded-lg ${group.addon ? 'border-2 border-orange-200 bg-orange-50/30' : 'border border-gray-200 bg-gray-50'}`}>
-                  <div className="p-2.5">
+                <div key={group.base.id} className="rounded border" style={{ borderColor: group.addon ? 'var(--seal-green)' : 'var(--ledger-line)' }}>
+                  {/* Base order */}
+                  <div className="p-3">
                     <div className="flex items-center justify-between mb-1">
-                      <span className="text-xs font-mono text-gray-500">{group.base.id}</span>
-                      <div className="flex items-center gap-1">
-                        {group.addon && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-orange-100 text-orange-700 border border-orange-300 font-semibold">
-                            UPSELL
-                          </span>
-                        )}
-                        {getSourceBadge(group.base.source)}
-                      </div>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-semibold text-gray-900">
-                          ₹{(group.base.amount_paise / 100).toFixed(0)}
-                        </span>
-                        {group.base.category && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-50 text-green-700 border border-green-200">
-                            {group.base.category}
-                          </span>
-                        )}
-                      </div>
-                      <span className="text-[10px] text-gray-400">
+                      <span className="font-body text-xs text-ink-muted">
+                        {SOURCE_LABELS[group.base.source] || group.base.source}
+                        {group.addon && <span className="text-seal-green font-medium ml-2">upsell pair</span>}
+                      </span>
+                      <span className="font-data text-[10px] text-ink-muted">
                         {new Date(group.base.created_at).toLocaleTimeString()}
                       </span>
                     </div>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="font-data text-sm font-medium text-ink">
+                          ₹{(group.base.amount_paise / 100).toLocaleString('en-IN')}
+                        </span>
+                        {group.base.category && (
+                          <span className="font-body text-[10px] text-ink-muted">{group.base.category}</span>
+                        )}
+                      </div>
+                      <span className="font-data text-[10px] text-ink-muted">{group.base.id}</span>
+                    </div>
                   </div>
+
+                  {/* Addon order — linked pair */}
                   {group.addon && (
-                    <div className="px-2.5 pb-2.5">
-                      <div className="pl-3 border-l-2 border-orange-300">
+                    <div className="px-3 pb-3">
+                      <div className="ml-3 pl-3 border-l-2" style={{ borderColor: 'var(--seal-green)' }}>
                         <div className="flex items-center justify-between mb-0.5">
-                          <span className="text-[10px] font-mono text-gray-400">{group.addon.id}</span>
-                          <span className="text-[10px] text-orange-600 font-medium">addon</span>
+                          <span className="font-body text-[10px] text-ink-muted">addon</span>
+                          <span className="font-data text-[10px] text-ink-muted">{group.addon.id}</span>
                         </div>
                         <div className="flex items-center gap-2">
-                          <span className="text-sm font-semibold text-gray-900">
-                            + ₹{(group.addon.amount_paise / 100).toFixed(0)}
+                          <span className="font-data text-sm font-medium text-ink">
+                            + ₹{(group.addon.amount_paise / 100).toLocaleString('en-IN')}
                           </span>
                           {group.addon.category && (
-                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-50 text-green-700 border border-green-200">
-                              {group.addon.category}
-                            </span>
+                            <span className="font-body text-[10px] text-ink-muted">{group.addon.category}</span>
                           )}
                         </div>
                       </div>
-                      <div className="mt-2 px-2 py-1.5 bg-orange-100/60 rounded text-xs text-orange-800 font-medium">
-                        ₹{(group.base.amount_paise / 100).toFixed(0)} base + ₹{(group.addon.amount_paise / 100).toFixed(0)} addon = ₹{((group.base.amount_paise + group.addon.amount_paise) / 100).toFixed(0)} — <span className="font-bold">{Math.round((group.addon.amount_paise / group.base.amount_paise) * 100)}% uplift</span>
+                      <div className="mt-2 pt-2 border-t" style={{ borderColor: 'var(--ledger-line)' }}>
+                        <p className="font-body text-xs text-ink">
+                          <span className="font-data">₹{(group.base.amount_paise / 100).toFixed(0)}</span> base + <span className="font-data">₹{(group.addon.amount_paise / 100).toFixed(0)}</span> addon = <span className="font-data">₹{((group.base.amount_paise + group.addon.amount_paise) / 100).toFixed(0)}</span> — <span className="font-semibold text-seal-green">{Math.round((group.addon.amount_paise / group.base.amount_paise) * 100)}% uplift</span>
+                        </p>
                       </div>
                     </div>
                   )}
@@ -177,22 +173,22 @@ export default function OrdersAndCustomers() {
 
         {tab === 'customers' && (
           customers.length === 0 ? (
-            <p className="text-sm text-gray-400 text-center py-6">No customers yet</p>
+            <p className="font-body text-sm text-ink-muted text-center py-8">No customers yet</p>
           ) : (
             <div className="space-y-2">
               {customers.map(customer => (
-                <div key={customer.id} className="p-2.5 bg-gray-50 border border-gray-200 rounded-lg">
+                <div key={customer.id} className="p-3 rounded border" style={{ borderColor: 'var(--ledger-line)' }}>
                   <div className="flex items-center justify-between mb-1">
-                    <span className="text-xs font-medium text-gray-900">{customer.identifier}</span>
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-200 font-medium">
+                    <span className="font-body text-xs font-medium text-ink">{customer.identifier}</span>
+                    <span className="font-data text-[10px] text-ink-muted">
                       {customer.order_count} order{customer.order_count !== 1 ? 's' : ''}
                     </span>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-sm font-semibold text-gray-900">
-                      ₹{(customer.total_spent_paise / 100).toFixed(0)} total
+                    <span className="font-data text-sm font-medium text-ink">
+                      ₹{(customer.total_spent_paise / 100).toLocaleString('en-IN')} total
                     </span>
-                    <span className="text-[10px] text-gray-400">
+                    <span className="font-data text-[10px] text-ink-muted">
                       Last: {new Date(customer.last_purchase_at).toLocaleTimeString()}
                     </span>
                   </div>
