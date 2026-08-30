@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "build": "tsc",
+    "build": "tsc && cp src/db/schema.sql dist/db/schema.sql && cp src/catalog-audit/trial-goals.json dist/catalog-audit/trial-goals.json",
     "start": "node dist/index.js",
     "mcp-stdio": "tsx src/mcp-server/mcp-stdio.ts",
     "catalog-audit": "tsx src/catalog-audit/run-trials.ts",
