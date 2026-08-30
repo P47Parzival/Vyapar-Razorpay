@@ -3,8 +3,9 @@
   "outputDirectory": "dist",
   "framework": "vite",
   "rewrites": [
-    { "source": "/api/:path*", "destination": "https://YOUR_RENDER_URL.onrender.com/api/:path*" },
-    { "source": "/health", "destination": "https://YOUR_RENDER_URL.onrender.com/health" },
-    { "source": "/.well-known/:path*", "destination": "https://YOUR_RENDER_URL.onrender.com/.well-known/:path*" }
+    { "source": "/api/:path*", "destination": "https://vyapar-server1.onrender.com/api/:path*" },
+    { "source": "/health", "destination": "https://vyapar-server1.onrender.com/health" },
+    { "source": "/.well-known/:path*", "destination": "https://vyapar-server1.onrender.com/.well-known/:path*" },
+    { "source": "/(.*)", "destination": "/index.html" }
   ]
 }

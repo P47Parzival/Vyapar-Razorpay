@@ -10,6 +10,7 @@ import MandatePanel from './components/MandatePanel';
 import MerchantOnboarding from './components/MerchantOnboarding';
 import CatalogAudit from './components/CatalogAudit';
 import ProductsCatalog from './components/ProductsCatalog';
+import vyaparLogo from '../assets/vyapar_logo.png';
 import './dashboard.css';
 
 type Tab = 'dashboard' | 'connect' | 'products' | 'catalog-confidence';
@@ -37,7 +38,7 @@ function App() {
             >
               &larr;
             </button>
-            <img src="/assets/vyapar_logo.png" alt="Vyapar" className="h-10" />
+            <img src={vyaparLogo} alt="Vyapar" className="h-10" />
             <span className="font-data text-[10px] px-2 py-0.5 rounded border border-ledger text-ink-muted">
               TEST MODE
             </span>
