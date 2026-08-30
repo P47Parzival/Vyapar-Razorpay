@@ -1,510 +1,455 @@
-# Vyapar — Bounded Agentic Commerce on Razorpay
+# Vyapar: Bounded Agentic Commerce on Razorpay (Track 1)
 
-Any AI agent can transact with this merchant. Every transaction is gated by deterministic policy, scoped by human-issued mandates, and fully auditable.
 
-## What This Is
-
-A hackathon project for the theme **"AI Growth & Agentic Commerce."**
-
-Vyapar makes a merchant **transactable by any AI buyer, end to end** — discoverable via `.well-known`, connectable via MCP, authorized via AP2/UAP-style mandates — while keeping a human merchant in control through deterministic, live-editable policy.
-
-Two internal LLM agents (Growth Agent, Buyer Agent), one external independent buyer process, and any MCP-capable AI client can submit **Proposals**. A deterministic **Policy Gateway** (6 checks, zero LLM calls) evaluates every proposal against merchant-defined rules. Only if all checks pass does anything reach Razorpay. Every action — approved, denied, or errored — writes exactly one row to an append-only audit ledger.
-
-### Core Architecture
-
-```
-                    ┌───────────────────────────────────────────┐
-                    │         External AI Agents                 │
-                    │  (Claude Desktop, other teams' bots, etc.) │
-                    └─────────────────┬─────────────────────────┘
-                                      │ MCP Protocol
-                    ┌─────────────────▼─────────────────────────┐
-                    │  .well-known/agent-commerce.json           │
-                    │  Discovery: capabilities, policy, endpoint │
-                    └─────────────────┬─────────────────────────┘
-                                      │
-┌─────────────┐   ┌─────────────┐    │    ┌──────────────────┐
-│ Growth Agent│   │ Buyer Agent │    │    │ Webhook Trigger  │
-│  (Claude)   │   │  (Claude)   │    │    │ (payment events) │
-└──────┬──────┘   └──────┬──────┘    │    └────────┬─────────┘
-       │ Proposal         │ Proposal  │ Proposal    │ Auto-trigger
-       └──────────────────┴───────────┴─────────────┘
-                          │
-                          ▼
-       ┌──────────────────────────────────────────────┐
-       │         Mandate Check (AP2/UAP-style)        │
-       │  Human-issued, scoped, time-boxed, revocable │
-       └──────────────────────┬───────────────────────┘
-                              ▼
-       ┌──────────────────────────────────────────────┐
-       │           Policy Gateway (6 checks)          │
-       │       deterministic • zero LLM calls         │
-       │  ─ mandate (scope: amount + category)        │
-       │  ─ per-transaction cap                       │
-       │  ─ velocity cap (daily total + count)        │
-       │  ─ category allowlist                        │
-       │  ─ discount ceiling                          │
-       │  ─ idempotency (dedup)                       │
-       └──────────────────────┬───────────────────────┘
-                              │ Only if ALL pass
-                              ▼
-       ┌──────────────────────────────────────────────┐
-       │       Razorpay MCP Server (test mode)        │
-       └──────────────────────┬───────────────────────┘
-                              ▼
-       ┌──────────────────────────────────────────────┐
-       │    Audit Ledger (SQLite, append-only)        │
-       │    Every proposal = exactly 1 row            │
-       └──────────────────────────────────────────────┘
-```
-
-**Key invariants:**
-- Agents NEVER get Razorpay credentials or call Razorpay directly
-- Policy Gateway contains ZERO LLM calls — only deterministic code
-- Every proposal writes exactly one ledger row (approved, denied, or errored)
-- Mandates are human-issued, scoped (amount + category), time-boxed, and revocable
-- Test mode only — no real money moves
-
+Whole ideation behing the product 0->1: <br>
+Demo Video Link: <br>
+Live website: <br>  
+ 
 ---
 
-## Tech Stack
-
-| Layer | Technology |
-|-------|-----------|
-| LLM | Claude Sonnet via AWS Bedrock Converse API |
-| Payments | Razorpay MCP Server (test mode, StreamableHTTP) |
-| Protocol | MCP Server (StreamableHTTP) + .well-known discovery |
-| Mandates | AP2/UAP/UPI Circle-style delegation model |
-| Backend | Express + TypeScript (tsx) |
-| Database | SQLite via better-sqlite3 (WAL mode) |
-| Frontend | React + Vite + Tailwind CSS |
-| Monorepo | npm workspaces |
+![Vyapar Banner](assets/Vyapar_banner.png)
 
 ---
+## Table of Contents
+ 
+1. [What Vyapar Is](#1-what-vyapar-is)
+2. [Design Philosophy](#2-design-philosophy)
+3. [The Policy Gateway: Every Money Action Is Bounded and Gated](#3-the-policy-gateway--every-money-action-is-bounded-and-gated)
+4. [The Mandate System: Human-Issued, Scoped, Revocable Authority](#4-the-mandate-system--human-issued-scoped-revocable-authority)
+5. [The Audit Ledger and Merchant-Owned Orders](#5-the-audit-ledger-and-merchant-owned-orders)
+6. [Making the Merchant Discoverable and Transactable](#6-making-the-merchant-discoverable-and-transactable)
+7. [The Growth Agent and the Buyer Agent](#7-the-growth-agent-and-the-buyer-agent)
+8. [Growing Revenue: Measured Upsell, Not Just a Claim](#8-growing-revenue-measured-upsell-not-just-a-claim)
+9. [Proving Agent-to-Agent Commerce](#9-proving-agent-to-agent-commerce)
+10. [A Real Pilot: Live Shopify Catalog, Honest Payment Boundary](#10-a-real-pilot-live-shopify-catalog-honest-payment-boundary)
+11. [In-App Checkout via Claude Desktop](#11-in-app-checkout-via-claude-desktop)
+12. [Catalog Legibility: Does an Agent Actually See the Whole Catalog?](#12-catalog-legibility-does-an-agent-actually-see-the-whole-catalog)
+13. [Graceful Failure: Demonstrated, Not Just Claimed](#13-graceful-failure--demonstrated-not-just-claimed)
+14. [The Dashboard](#14-the-dashboard)
+15. [Real-World Evidence and Rollout Path](#15-real-world-evidence-and-rollout-path)
+16. [Tech Stack](#16-tech-stack)
 
-## Setup
+## 1. What Vyapar Is (GoKwik Insipred, )
 
-### Prerequisites
-
-- Node.js 18+
-- npm 9+
-
-### 1. Clone and install
-
-```bash
-git clone <repo-url>
-cd Vyapar
-npm install
-```
-
-### 2. Environment variables
-
-Create a `.env` file in the project root:
-
-```env
-RAZORPAY_KEY_ID=rzp_test_...
-RAZORPAY_KEY_SECRET=...
-RAZORPAY_WEBHOOK_SECRET=whsec_...
-BEDROCK_API_KEY=ABSK...
-AWS_REGION=ap-south-1
-BEDROCK_MODEL_ID=global.anthropic.claude-sonnet-4-6
-PORT=3001
-```
-
-### 3. Run
-
-```bash
-# Start both server and dashboard:
-npm run dev
-
-# Or separately:
-npm run dev:server    # Express API on :3001
-npm run dev:dashboard # Vite dev server on :5173 (proxies /api to :3001)
-
-# Run the external buyer agent (separate terminal):
-npm run external-buyer -- "Buy me a birthday gift under 1000 rupees"
-```
-
-Open **http://localhost:5173** in your browser.
-
+![Vyapar Banner](assets/Vyapar_arch.png)
+<p align="center">
+  <img src="assets/Vyapar_nutshell.png" alt="Vyapar Nutshell" />
+</p>
+ 
+Vyapar answers both halves of the problem statement's title, not just one.
+ 
+It is an **agentic commerce layer** that makes a merchant transactable end-to-end by any
+AI buyer  not just an agent Vyapar itself built, but a genuinely independent one,
+discovering the merchant only through a published protocol surface. And it is a
+**revenue-growth system**  a live, measured cross-sell mechanism that increases order
+value during checkout, with the uplift shown as a real number, not narrated.
+ 
+Both halves sit on top of the same architectural spine: a deterministic **Policy
+Gateway** that is the only thing in the system capable of moving money, gated by
+**mandates**  scoped, human-issued, revocable spending authorizations  with every
+action, approved or denied, written to an **append-only audit ledger**.
+ 
 ---
-
-## Demo Script (90-second version)
-
-Follow these steps in order during the live demo. No code changes needed.
-Two terminal windows: one for the server/dashboard, one for the external buyer.
-
-### 1. Dashboard Tour (15s)
-
-- Open `http://localhost:5173`
-- Point out: **Protocol Surface** panel (MCP endpoint, manifest URL, webhook receiver, external buyer command)
-- Show: empty ledger, stat cards, policy controls, mandate panel
-
-### 2. Issue a Scoped Mandate (10s)
-
-- Click **"Issue Mandate"** in the Mandates panel
-- Set: Agent = Buyer, Max = 1000, Categories = skincare only, Expiry = 30 min
-- Click **Issue** — the mandate appears with ACTIVE badge
-- "This is the human authorization — same shape as NPCI's proposed UAP on UPI Circle"
-
-### 3. Internal Buyer — Successful Purchase (15s)
-
-- In AI Buyer Agent, type: `Find me a moisturizer under 700 rupees`
-- Click **Shop** — agent browses catalog, proposes, gateway approves
-- Green ledger row appears with **INTERNAL** badge
-- "Our own buyer agent, bounded by the mandate scope and all 6 policy checks"
-
-### 4. External Buyer — Agent-to-Agent Commerce (20s)
-
-- **Switch to second terminal**
-- Run: `npm run external-buyer -- "Buy me a skincare gift under 900 rupees"`
-- Show the output: discovers merchant via manifest, connects MCP, reasons, proposes
-- **Switch back to dashboard** — new green row with **MCP EXTERNAL** badge
-- "This is a separate process, zero shared code, transacting through the protocol surface"
-
-### 5. Mandate Scope Enforcement (15s)
-
-- In AI Buyer, type: `Buy the Collagen Powder` (wellness, ₹1250)
-- Gateway denies with **MANDATE_SCOPE_EXCEEDED** — red row appears
-- "The agent doesn't know about the mandate scope. The gateway enforces it deterministically."
-- Click to expand: show the pipeline check that failed
-
-### 6. Revoke Mandate (10s)
-
-- Click **Revoke** on the active mandate
-- Try: `Buy the Gentle Face Wash` (₹450, skincare — normally fine)
-- Gateway denies with **MANDATE_EXPIRED** — "Revocation is instant and absolute"
-
-### 7. Webhook-triggered Growth (bonus, 15s)
-
-- Point to a green ledger row with **WEBHOOK** badge (if one exists from a real payment)
-- "When a real Razorpay payment completes, the webhook fires, signature is verified, and the Growth Agent automatically runs an upsell — no human click needed"
-
-### Closing Framing
-
-> "This mandate model — a principal delegating a capped, revocable authority to an agent — is the same shape NPCI's proposed Unified Agent Protocol is standardizing on top of UPI Circle. We didn't implement UAP (it isn't live yet). We implemented the pattern it's standardizing, honestly labeled, on real Razorpay rails."
-
+ 
+## 2. Design Philosophy
+ 
+Two decisions shape everything else in this project, made early and never revisited:
+ 
+**LLMs decide *what* to attempt. They never decide *whether money moves*.** Every agent
+in this system  internal or external  can only ever construct a `Proposal`: an item,
+an amount, a category, a stated reason. That proposal is handed to a single,
+LLM-free function that runs a fixed sequence of deterministic checks against it. The
+agent has no code path to Razorpay that bypasses this function. This is true for the
+internal Growth Agent, the internal Buyer Agent, every external MCP client, and every
+webhook-triggered action  there is exactly one door into money movement, and an LLM
+never stands behind it.
+ 
+**Every claim in this project is stated at the confidence level it actually earned.**
+Simulated scenarios are labeled `SIMULATED`. A manifest that follows a discovery
+convention but isn't certified against a formal spec says so. A statistical finding run
+at N=10 per goal is presented as a directional signal with raw counts shown, never
+dressed up with a confidence interval the sample size doesn't support. A pilot catalog
+connection that's real is shown next to a checkout that's explicitly test-mode, with the
+boundary stated on-screen, not buried. This discipline shows up everywhere below, and
+it's deliberate: overclaiming what's real is a worse failure mode for a project like
+this than a smaller, honestly-scoped one.
+ 
 ---
+ 
+## 3. The Policy Gateway  Every Money Action Is Bounded and Gated
+ 
+Every proposal, regardless of where it came from, passes through the same sequence of
+checks, in order, fail-fast:
+ 
+1. **Mandate validity**  does a non-expired, non-revoked mandate exist for this agent?
+2. **Mandate scope**  does the proposed amount and category fit within *this specific
+   mandate's* granted scope (not just the global policy)?
+3. **Per-transaction cap**  does the amount exceed the merchant's configured ceiling?
+4. **Daily velocity cap**  has this agent's cumulative spend today already hit its
+   limit?
+5. **Category allowlist**  is this category one the merchant has opted to allow agents
+   to purchase in at all?
+6. **Discount ceiling**  if a discount is proposed, does it exceed the merchant's
+   configured maximum?
+7. **Idempotency**  has this exact proposal already been processed (guarding against a
+   retried or duplicated agent call double-charging)?
+A proposal that clears every check reaches Razorpay's test-mode API and a real order or
+payment link is created. A proposal that fails any check is denied with a specific,
+named reason  `MANDATE_EXPIRED`, `MANDATE_SCOPE_EXCEEDED`, `CAP_EXCEEDED`,
+`VELOCITY_EXCEEDED`, `CATEGORY_NOT_ALLOWED`, `DISCOUNT_TOO_HIGH`, `DUPLICATE_PROPOSAL`
+ never a generic failure. Every one of these reasons is translated into a plain-English
+sentence a non-technical merchant can read directly, and that sentence is what surfaces
+in the ledger and, later, inside an agent's own conversational response.
 
-## Project Structure
-
-```
-Vyapar/
-├── packages/
-│   ├── server/
-│   │   └── src/
-│   │       ├── agents/         # Growth + Buyer agents (LLM tool-use loops)
-│   │       ├── gateway/        # Policy Gateway + 6 deterministic check modules
-│   │       ├── mcp-server/     # Vyapar as MCP server (external agent entry point)
-│   │       ├── webhooks/       # Razorpay webhook receiver (signature-verified)
-│   │       ├── razorpay/       # MCP client → Razorpay execution
-│   │       ├── ledger/         # Append-only audit log + human-readable explainer
-│   │       ├── catalog/        # Product catalog + API
-│   │       ├── db/             # SQLite schema, migrations, seed
-│   │       └── api/            # REST routes (policy, mandates, agents, ledger SSE)
-│   ├── dashboard/
-│   │   └── src/
-│   │       └── components/     # React UI (LedgerFeed, MandatePanel, PolicyPanel, etc.)
-│   └── external-buyer-demo/
-│       └── src/                # Independent AI buyer (zero shared code with server)
-├── BUILD_PLAN.md               # Original design document (Steps 1-10)
-├── BUILD_PLAN2.md              # Protocol interoperability plan (Steps 1-6)
-├── .env                        # Credentials (not committed)
-└── package.json                # Workspace root
-```
-
+![exceed](assets/Vyapar_mandatexceed.png)
+ 
+This gateway has not changed in shape since it was first built. Everything added in
+later phases  the MCP server, the webhook receiver, the external buyer process, the
+Shopify-sourced catalog, the upsell flow, the Claude Desktop integration  is a new
+*caller* of this same function, never a new path around it.
+ 
 ---
-
-## Architecture Highlights for Judges
-
-1. **Protocol-interoperable**: Any MCP-capable AI agent can discover (`.well-known`), connect (MCP), and transact with this merchant — no custom integration code on the buyer's side.
-
-2. **Mandate model mirrors UAP/UPI Circle**: Human-issued, scoped (amount + category), time-boxed, instantly revocable. Not an API key — a delegation. `MANDATE_SCOPE_EXCEEDED` is a distinct denial from `MANDATE_EXPIRED`.
-
-3. **True agent-to-agent proof**: The external buyer process (`packages/external-buyer-demo/`) shares zero code with the server. It discovers the merchant, reasons with its own LLM, and proposes through the protocol — landing in the same ledger, same 6 checks.
-
-4. **Separation of concerns**: Agents propose, gateway decides, Razorpay executes. No layer does another's job. The gateway is the ONLY thing that calls Razorpay.
-
-5. **Denial is first-class**: A denied proposal is a normal return value with a structured reason code, not an exception. Agents handle denials gracefully.
-
-6. **Zero-trust agent boundary**: Even if the LLM hallucinates a ₹50,000 transaction, the gateway's deterministic cap check denies it. No prompt engineering required for safety.
-
-7. **Full audit trail**: Every row records: who proposed, what they proposed, which checks ran, what passed/failed, what happened on Razorpay (if anything), and a human-readable explanation.
-
-8. **Live policy editing**: A merchant can change caps in real-time. The next proposal immediately sees the new rules.
-
-9. **Real event triggers**: The Growth Agent's upsell flow can fire automatically from a Razorpay `payment_link.paid` webhook — signature-verified, not just a button click.
-
-10. **Honest labeling**: Every simplification is explicitly labeled (test mode, `consent_method: dashboard_click`, "not a certified UCP implementation"). No overclaiming.
-
+ 
+## 4. The Mandate System  Human-Issued, Scoped, Revocable Authority
+ 
+A mandate is not an API key. It is the specific thing this project claims most directly
+maps to the emerging shape of agent-authorized payments across the industry  AP2's
+delegated-payment mandates, and NPCI's proposed Unified Agent Protocol, which is itself
+built on UPI Circle's existing pattern of a primary user delegating a capped, revocable
+spending authority to a secondary party. Vyapar's mandate is structurally the same
+shape, built before the underlying rail (UPI Circle/UAP-native delegation) existed to
+carry it  which is stated plainly rather than implied to be more than it is.
+ 
+Concretely, a mandate is issued by an explicit human action  a dashboard "Issue
+Mandate" flow, not an automatic refresh  and carries:
+ 
+- A **maximum amount** the agent may spend under this authorization.
+- A **category scope**  which kinds of purchases this authorization covers, not just
+  the merchant's global allowlist.
+- An **expiry**, after which the mandate stops working without any further action.
+- A **consent method**, honestly labeled (`dashboard_click`  not a cryptographic
+  signature; a production system following AP2's actual proof-of-authorization model
+  would need one, and this project says so rather than implying otherwise).
+A mandate can be **revoked** at any moment from the dashboard, and the very next
+proposal attempted under it fails immediately and correctly  this revocability was
+demonstrated live, not just implemented. An agent can *discover* its own currently
+active mandate and scope via a read-only tool (`get_active_mandate`), but it can never
+create, extend, or grant itself one  that authority stays exclusively with a human,
+on purpose, since letting an agent self-authorize its own spending would defeat the
+entire point of the model.
+ 
 ---
+ 
+## 5. The Audit Ledger and Merchant-Owned Orders
 
-## Catalog Legibility: Does Our Agent Actually See Every Product?
+<p align="center">
+  <img src="assets/Vyapar_Ledger.png" width="60%" align="middle" />
+  <img src="assets/Vyapar_orders.png" width="38%" align="middle" /> 
+</p>
 
-Everything built so far assumes that if a product is in the catalog and the checkout mechanism works, an agent will fairly consider it. We tested whether that's actually true.
-
-### What we ran
-
-6 natural-language shopping goals (skincare, wellness, casual clothing, tech gadget, birthday gift under ₹1,500, haircare), each run 10 times against the full 33-item active catalog (15 seeded demo items + 18 live Shopify-sourced items), using Claude Sonnet 4.6 via AWS Bedrock. The catalog order was randomly shuffled before each trial to control for position effects. 60 total trials, batch `batch_1787990762535_8bb168`.
-
-### What we found
-
-**Strong item concentration**: across all 6 goals, only 11 distinct items were ever picked out of 33 available. The remaining 22 items were never once selected across any goal.
-
-Notable patterns (raw counts, not percentages alone):
-
-- **"Casual clothing"**: Classic Cotton Crew T-Shirt picked 10/10. The only other in-stock clothing item — Slim Fit Denim Jeans (₹1,299) — was shown every trial and never once chosen
-- **"Tech gadget"**: Premium Ball Pen Set picked 10/10 — categorized as `pen_set`, not a tech product. No actual tech items (keyboard, mouse, speaker, earbuds, smartwatch) were in the trial catalog (all had stock = 0 at run time), so the agent chose the closest match it could find from what was available — and locked onto it every trial
-- **"Haircare"**: Anti-Dandruff Shampoo 5/10, Hair Growth Oil 5/10 — the Nourishing Conditioner (same category, ₹420, similar price) was shown every trial and picked 0/10
-- **"Wellness/fitness"**: Ashwagandha Capsules 8/10, Multivitamin Gummies 2/10 — Collagen Powder (₹1,250, same wellness category) was shown every trial and never picked
-- **"Skincare daily"**: Daily Moisturizer SPF 30 7/10, Gentle Face Wash 3/10 — Vitamin C Serum (₹890) and Hydrating Toner (₹550), both skincare and in-stock, were shown every trial and picked 0/10
-- **"Gift under ₹1,500"**: Bamboo Makeup Brush Set 6/10, Jade Face Roller 3/10, Vitamin C Serum 1/10 — 30 of 33 in-stock items never considered
-
-**No strong position bias**: catalog order was shuffled each trial. Across all goals, picks distributed roughly evenly across the top, middle, and bottom thirds of the presented list — the agent was not simply choosing whatever appeared first.
-
-### What this means for the merchant
-
-If you're a merchant relying on an AI agent to surface your products, a significant portion of your catalog may be effectively invisible — not because the agent can't see the items (they're in every request), but because the agent consistently favors certain items over others. This is the catalog legibility problem, and it's real even at this small sample size.
-
-### Scope and limits
-
-This is a small, one-time, single-model measurement, directly inspired by rigorous agent-behavior-auditing work happening elsewhere in this space — full statistical validation (multi-model, bootstrap confidence intervals, hundreds of trials, a planted-bias validation suite) is a legitimate, larger project of its own that we scoped out of this build given the time available. What's here is honest and real at the sample size it was run at, not a substitute for that larger rigor.
-
-The dashboard includes a "Catalog Legibility Check" panel showing these results, clearly labeled as a one-time measurement with the sample size stated next to every number.
-
+Every proposal  approved or denied, from any source  writes exactly one row to an
+append-only ledger, with three possible terminal states: `executed`, `denied`, `error`.
+Nothing is ever overwritten or deleted. This ledger is the audit trail the problem
+statement's bar explicitly asks for, and it's genuinely queryable and drillable, not a
+log file.
+ 
+Separately, and only for successfully `executed` outcomes, the system writes to real
+`orders` and `customers` tables  first-class business records, distinct from the audit
+ledger, each order traceable back to the exact ledger row that authorized it. This
+distinction matters: the ledger is a record of *decisions*, the orders table is a record
+of *outcomes*, and a merchant using this system would own both, in their own database,
+regardless of which agent, protocol, or entry point produced the sale. Every order is
+tagged with its `source`  internal Growth Agent, internal Buyer Agent, external MCP
+client, or webhook  so a merchant (or a judge) can see, at a glance, that a sale
+originating from a completely independent external agent lands in exactly the same
+business record as one from the merchant's own tooling.
+ 
 ---
+ 
+## 6. Making the Merchant Discoverable and Transactable
 
-## Honesty Notes
+<p align="center">
+  <img src="assets/Vyapar_legitCheck.png" width="80%" align="middle" />
+</p>
 
-- **Not a full protocol implementation**: We publish a `.well-known` manifest and an MCP server in the *spirit* of UCP/ACP discovery conventions. We do not claim spec compliance.
-- **Mandates are not cryptographically signed**: `consent_method: dashboard_click` is an honest label. A production system would use AP2-style proof-of-authorization.
-- **Webhook secret is a shared HMAC key**: Standard Razorpay practice, but not a zero-knowledge proof.
-- **Test mode only**: All Razorpay calls use test-mode keys. No real money moves.
-- **UAP is not live**: We implement the *pattern* NPCI is standardizing, not the protocol itself.
-
+ 
+A merchant with a database of products is not automatically visible or usable to an AI
+agent. Vyapar closes that gap on two fronts, deliberately modeled on the discovery
+conventions emerging across ACP, UCP, and MCP rather than inventing a bespoke one:
+ 
+**Vyapar exposes itself as an MCP server**, not just an MCP client. Any MCP-capable
+agent  Claude Desktop, Claude Code, a completely separate process built by someone
+else  can connect and call `browse_catalog`, `get_product`, `get_active_mandate`,
+`submit_purchase_proposal`, `submit_addon_proposal`, and `check_proposal_status`
+directly, with no custom integration code on their end. Every one of these tools that
+can move money routes through the exact same Policy Gateway described in Section 3 
+there is no separate, less-guarded path for external callers.
+ 
+**Vyapar publishes a `.well-known/agent-commerce.json` discovery manifest**, in the
+spirit of the discovery conventions UCP and similar protocols are converging on
+(explicitly labeled as not a certified implementation of any one spec, since no such
+certification exists yet to claim). It states the merchant's identity, mode (test), the
+MCP endpoint, the catalog feed, and a public, non-sensitive summary of the current
+policy limits  so an external agent can check "would this even be allowed" before
+attempting a proposal, the same way capability negotiation is meant to work across this
+emerging protocol landscape.
+ 
+Together, these mean the "agent-readable catalog" and "transactable end to end"
+requirements aren't just true of Vyapar's own internal agents  they're true of any
+agent that speaks MCP, reachable through a standard, published surface.
+ 
 ---
+ 
+## 7. The Growth Agent and the Buyer Agent
+ 
+Two internal agents exercise this system from opposite directions, and both are
+strictly proposal-only  neither has any code path to Razorpay except through the
+gateway.
+ 
+**The Growth Agent** acts on the merchant's behalf: recovering an abandoned cart, or
+suggesting a cross-sell/upsell after a completed order, using the catalog's
+`pairs_with_ids` relationships to ground its suggestions in real product pairings
+rather than an LLM inventing a plausible-sounding bundle.
 
-## Real-World Evidence & Rollout Path
-
-### The problem this plan solves is not hypothetical
-
-GoKwik and PayU launched a live, multi-brand D2C agentic-checkout experience inside ChatGPT in India in July 2026 — brands including Hyphen, Beardo, and Kilrr, with hundreds more planned — built on the Agentic Commerce Protocol. This proves both that this category is real and that India-specific rollout is already underway. This project is not staking out imaginary future ground.
-
-### Adoption friction, not protocol capability, is the actual bottleneck
-
-OpenAI's first attempt at exactly this category (Instant Checkout, launched with Shopify and Etsy in September 2025) reached fewer than 15 live merchants out of over a million eligible ones within six months, and was shelved in March 2026 before a February 2026 relaunch as "Buy it in ChatGPT." The gap wasn't technical feasibility — the protocol worked — it was that merchants weren't willing or able to self-integrate into a new checkout surface.
-
-### GoKwik's stated model is the one this project mirrors
-
-GoKwik's repeated positioning across every announcement:
-
-> "Every GoKwik merchant becomes available inside ChatGPT with **no engineering work, no new integration, and no separate listing fee.** Brands **keep full ownership of catalogue, customer and conversion data.**"
-
-This project's zero-code onboarding simulation (Step 1 of Build Plan 3) and merchant-owned `orders`/`customers` tables (Step 2) are a working demonstration of exactly those two guarantees — not descriptions of them, but running code you can point at on screen.
-
-### The realistic deployment shape
-
-In order:
-
-1. **NPCI defines agent-native delegation primitives** at the UPI rail level (UPI Circle, UPI Reserve — both explicitly named as "upcoming" in GoKwik's own announcements, meaning even GoKwik's live system isn't on agent-native rails yet).
-2. **A PSP/platform layer** (Razorpay, or a GoKwik-style enabler built on top of a PSP) implements the policy gateway, mandate system, and merchant-facing dashboard once.
-3. **Individual merchants opt in** via a settings toggle, connecting an already-existing catalog, writing zero code.
-
-This project is a working prototype of the middle layer (#2), built ahead of the bottom layer (agent-native UPI rails) being finalized — which is an honest description of where this sits, not a weakness to obscure.
-
-### What this means for judges
-
-Every architectural choice in this project (the deterministic gateway, the scoped mandates, the platform/merchant separation, the zero-code onboarding, the merchant-owned data tables) is a direct response to a specific, named, real-world friction that either killed a live product (Instant Checkout v1) or is the stated differentiator of a live competitor (GoKwik). None of it is speculative.
-
+**The Buyer Agent** acts on a customer's behalf: given a natural-language shopping goal,
+it browses the real catalog, reasons over real prices and categories, and constructs a
+proposal  this is the internal proof that an AI shopper, not just a merchant-side
+agent, can transact safely within the same gated system.
+ 
 ---
+ 
+## 8. Growing Revenue: Measured Upsell, Not Just a Claim
 
-## Pilot: Real Shopify Catalog Connection
-
-### What was connected
-
-A real Shopify development store (`vyapar-hmndi3kr.myshopify.com`, store name: "Vyapar") was connected as a live pilot. This is a Shopify-hosted store with real product data — not a mock, not seeded fixtures, not a simulation.
-
-17 products were imported from the store's live catalog (Shopify's default development store sample data: Gift Cards, Snowboards, Selling Plans items). These sit alongside the 15 pre-existing demo catalog items — the pilot is additive, not destructive.
-
-### How the merchant connected (zero engineering work)
-
-The merchant (in this case, the project developer acting as the pilot merchant) performed the following steps, taking under two minutes:
-
-1. Opened the Shopify Dev Dashboard and created an app
-2. Configured Admin API scopes: granted `read_products` only
-3. Installed the app on the development store
-4. Copied the Client ID and Client Secret from the app settings
-5. Pasted both into Vyapar's onboarding form (domain + credentials)
-
-No code was written by the merchant. No OAuth app review was needed. No Shopify approval process. The platform (Vyapar) handles the token exchange (client credentials grant for a temporary access token) and encryption automatically.
-
-### The boundary: real catalog, test-mode checkout
-
-Product data flowing through this system is real — live from the connected Shopify store, synced every 15 minutes, with manual refresh available. Prices, stock levels, titles, and descriptions are the merchant's actual catalog data.
-
-Payment settlement is not real. All Razorpay calls use test-mode API keys belonging to the project developer's own Razorpay account. No funds are transferred to the connected Shopify merchant or anyone else. This is disclosed explicitly on every surface:
-
-- The `.well-known/agent-commerce.json` manifest carries `"mode": "test"` and `"catalog_source": "live_shopify_pilot"` at the top level
-- Every Shopify-sourced catalog item in the API includes `checkout_mode: "razorpay_test"` and a human-readable disclosure note
-- The dashboard shows paired `LIVE SHOPIFY` + `TEST CHECKOUT` badges on any ledger entry involving pilot items
-- The MCP server's proposal responses include a `settlement_disclosure` field for any transaction against pilot catalog items
-
-### Why real checkout is out of scope (and why that's honest, not a gap)
-
-Moving real funds to a real third-party merchant through Razorpay requires:
-
-1. **Razorpay Partner account** — a business relationship with Razorpay (Partner Dashboard access, `client_id`/`client_secret` from Razorpay, not self-serve)
-2. **Linked Account with KYC** — the pilot merchant must submit PAN, bank account details, and business proof; Razorpay must verify and approve
-3. **Route-based settlement** — transfers/settlements configured per-transaction to the merchant's linked account, with hold periods and compliance obligations
-4. **Chargeback and refund liability** — real financial risk that requires legal agreements, not just API integration
-
-None of this is available in the time scope of a hackathon, and even if it were, taking on real financial risk with a pilot merchant's real money for a demo deadline would be reckless. The test-mode boundary is a deliberate architectural choice — the same code path that processes a test-mode payment would process a real one, with only the Razorpay credentials and Route configuration changing. The policy gateway, the six checks, the mandate system, and the ledger all work identically regardless of whether the payment is real.
-
-### What a production version additionally requires
-
-To accept real payments for this pilot merchant and settle real funds to their bank account:
-
-- Razorpay Partner approval (business relationship, not a self-serve signup)
-- A Linked Account created for the merchant with verified KYC documents
-- Route-based transfer logic in the Razorpay execution layer (the only code change needed — the gateway stays as-is)
-- Legal agreements covering chargeback liability, refund policy, and settlement schedules
-- The merchant's explicit written consent to receive real payments through this platform
-
-The code is ready. The business and compliance prerequisites are not — and honestly naming them is more credible than hand-waving past them.
-
+![Upsell](assets/Vyapar_growth.png)
+ 
+The problem statement's title has two halves  grow revenue, *or* make the merchant
+transactable  and for most of this project's life, only the second half had a real,
+measured demonstration behind it. This gap was closed directly.
+ 
+During a live checkout  including inside the Claude Desktop flow described in Section
+11  a successful purchase can surface one paired add-on item, looked up deterministically
+from the catalog's real `pairs_with_ids` relationships (never an LLM's improvised
+suggestion of what "might pair well"). If the agent conversationally offers it and it's
+accepted, that becomes a second, independent proposal  evaluated fresh, against the
+same mandate's *remaining* scope, through the identical six-plus-one checks. Accepting a
+base purchase does not pre-authorize its addon; an addon can be denied on its own merits
+even immediately after a successful purchase, which is itself a legitimate second
+graceful-failure demonstration, not a contrived one.
+ 
+When an addon is accepted, the resulting order is linked back to its base order in the
+`orders` table, and the dashboard shows the combined result as a real, computed number 
+base value, addon value, combined total, and the resulting percentage uplift  visible
+on screen, not just described out loud during a demo. This is the concrete, literal
+answer to "grow the merchant's revenue": a real transaction's value, measurably higher
+because of a gated, catalog-grounded suggestion.
+ 
 ---
-
-## Demo: In-App Checkout via Claude Desktop
-
-This demo shows Claude Desktop — an app we did not build — completing a real, policy-gated, test-mode transaction against a live merchant catalog, using our MCP server as the checkout layer. The full audit trail appears in the dashboard with zero manual entry.
-
-### Setup (before judges arrive)
-
-1. **Start the server**: `npm run dev` (or `npm run dev:server` for server only)
-2. **Open the dashboard**: `http://localhost:5173` in a browser
-3. **Open Claude Desktop** (must have been restarted after the MCP config was added)
-4. **Issue a mandate from the dashboard**: click "Issue Mandate" — set Agent = Buyer, Max = ₹1000, Categories = accessories, Expiry = 30 min. Say out loud: "I've authorized this agent to spend up to ₹1,000 on accessories, expiring in 30 minutes."
-
-### The purchase (Claude Desktop)
-
-5. **Type in Claude Desktop**:
-   > "I want to buy a snowboard under ₹800. Can you check what's available and purchase one if I have an active spending authorization?"
-
-6. **Narrate as Claude works**:
-   - Claude calls `get_active_mandate` — "It's checking if it has spending authorization. It found the mandate we just issued."
-   - Claude calls `browse_catalog` — "Now it's browsing real product data. These items are live from a connected Shopify store, not a static list we wrote."
-   - Claude reasons about which item fits the budget and category.
-   - Claude calls `submit_purchase_proposal` — "This is the only door into the Policy Gateway. Claude cannot touch Razorpay directly — it can only propose."
-
-7. **Claude reports success**: it will say something like "I've purchased The Collection Snowboard: Hydrogen for ₹600. A payment link was created."
-
-8. **Switch to the dashboard** (do not wait for a question from judges):
-   - Point to the new green ledger row with **MCP EXTERNAL** + **LIVE SHOPIFY** + **TEST CHECKOUT** badges
-   - Expand it: show all 6 policy checks passing, the Razorpay payment link ID, the human-readable explanation
-   - Point to the Orders tab: new order with `source: external_mcp_client`, the Shopify product ID
-   - Say: "You just watched Claude Desktop — an app we didn't build — complete a real, policy-gated, test-mode transaction against a real merchant catalog. Here is the exact audit trail it produced, with zero manual entry on our part."
-
-### The graceful failure (Claude Desktop)
-
-9. **In the dashboard**: lower the per-transaction cap to ₹500 (Policy panel, set max per-transaction to 500) — or just note that the mandate caps at ₹1000 and pick a product above that.
-
-10. **Type in Claude Desktop**:
-    > "Actually, can you get me The Collection Snowboard: Oxygen? I think it's around ₹1025."
-
-11. **Claude attempts the purchase** and gets denied. It will explain the specific reason conversationally — something like: "That snowboard costs ₹1,025, which exceeds the ₹1,000 limit on your current spending authorization. I can't complete this purchase."
-
-12. **Switch to the dashboard**: point to the new **red** ledger row. Expand it — show which check failed (`MANDATE_SCOPE_EXCEEDED`), the attempted amount vs. the limit. Say: "The denial happened inside the checkout surface itself — Claude explained exactly why it couldn't proceed. The same denial is recorded in the audit ledger with the full policy trace."
-
-### Closing (one sentence)
-
-> "Every money action here was explainable, bounded by a mandate a human explicitly issued, and gated by a deterministic policy layer that never once called an LLM to decide whether money should move."
-
-### Timing
-
-- Setup: 2 min (before judges)
-- The purchase: ~45 sec (Claude takes 5-10s to reason through tool calls)
-- Dashboard audit trail: 30 sec
-- The graceful failure: ~30 sec
-- Closing: 10 sec
-- **Total live demo: under 2 minutes**
-
-### Tips
-
-- Don't script exact words you expect Claude to say — its phrasing varies. Script what you'll point at and say yourself.
-- If Claude asks a clarifying question instead of immediately buying, just answer naturally — it's still demonstrating agent reasoning, which is the point.
-- Have the dashboard visible on a second monitor or split screen so the switch is instant.
-- The mandate expiry is real — if more than 30 minutes pass between issuing and demo, issue a fresh one.
-
+ 
+## 9. Proving Agent-to-Agent Commerce
+ 
+The problem statement's "why now" names agent-to-agent commerce specifically as the open
+problem the global protocol race is racing to solve. Proving Vyapar's own agents can
+transact with Vyapar's own gateway doesn't answer that  it only proves the gateway is
+safe when called by code the project itself wrote.
+ 
+The real test built for this: a **second, fully independent process**, sharing zero
+code with the merchant backend. It does not import Vyapar's internal types, does not
+hardcode any catalog item IDs, and runs its own separate LLM call, entirely disconnected
+from the merchant's own codebase. It discovers Vyapar purely by fetching the published
+`.well-known` manifest and connecting to the MCP server described in Section 6  the
+same surface any unrelated third party's agent would use. Given a natural-language
+goal, it independently browses the real catalog, reasons about what to buy, retrieves
+its own mandate's scope, and submits a proposal  landing in the exact same ledger,
+passing through the exact same checks, as every other transaction in the system.
+ 
+Run alongside the Claude Desktop flow in Section 11, this produces the closing proof:
+two agents, built independently, that have never seen each other's code, both
+transacting with the same merchant, both fully audited, both bounded by the same gate.
+ 
 ---
+ 
+## 10. A Real Pilot: Live Shopify Catalog, Honest Payment Boundary
+ 
+To move past "we built infrastructure that could theoretically support a real
+merchant" toward an actual, verifiable pilot, Vyapar connects to a real Shopify store's
+real product catalog via the Shopify Admin API.
+ 
+A merchant (or, for testing, a Shopify development store) grants a **read-only**
+`read_products` access token through Shopify's own two-minute custom-app flow  no code
+written on their side, no OAuth review process, no waiting. Real products  titles,
+live prices, live stock  flow into Vyapar's catalog automatically, correctly converted
+and mapped, alongside (not replacing) the original demo catalog. A manual refresh (and
+optional scheduled sync) keeps this from becoming a stale, one-time snapshot: changing a
+price or stock level in the real Shopify store and clicking "Refresh catalog" reflects
+the change without a server restart.
+ 
+**The payment side of this pilot is deliberately, explicitly kept on Razorpay test
+mode**, using Vyapar's own test account  not the pilot merchant's real money. This is
+not a shortcut taken to save time; it's a considered boundary. Actually settling real
+funds into a real third-party merchant's real bank account requires Razorpay
+Partner/Route onboarding: a formal Partner relationship with Razorpay, a Linked Account
+for the merchant backed by real KYC documentation, and real compliance obligations
+around refunds and chargebacks  a business and compliance process, not something a
+weekend of coding can or should route around. Every place this pilot connection is
+shown  the catalog UI, the discovery manifest, purchase confirmations  carries a
+paired disclosure: **"Live from Shopify" always shown next to "Checkout: Razorpay Test
+Mode,"** so the real/test boundary is never ambiguous to anyone looking at it, merchant
+or judge.
+ 
+---
+ 
+## 11. In-App Checkout via Claude Desktop
 
-## Demo: Growth + Agent-to-Agent, Combined
 
-This demo runs both halves of the problem statement's title back-to-back: **"AI Growth"** (measured revenue uplift via upsell) and **"Agentic Commerce"** (two independent agents, zero shared code, same protocol surface). One flow, two claims, one audit trail.
+<p align="center">
+  <img src="assets/Vyapar_inapp.png" width="35%" align="middle" />
+  <img src="assets/Vyapar_checkout.png" width="60%" align="middle" /> 
+</p>
 
-### Prerequisites
+Everything above converges into a single, live demonstration: Vyapar's MCP server,
+already built for any external agent, wired directly into the actual Claude Desktop
+application  an app this project didn't build  via a local connection, no hosting or
+public URL required.
+ 
+From inside a normal Claude Desktop conversation: a natural-language shopping request
+triggers `browse_catalog`, returning real Shopify-sourced product data reasoned over
+conversationally, not from a hardcoded list. Claude retrieves its own active mandate's
+scope via `get_active_mandate`, and submits a purchase proposal through the same gated
+pipeline as everything else in this document. If it clears every check, a real
+test-mode Razorpay order is created, and the purchase  along with any offered upsell
+from Section 8  is confirmed back to the user without ever leaving the chat interface.
+Switching to the dashboard immediately afterward shows the exact same transaction as a
+new ledger row and a new order, attributed to the correct source, with no manual entry
+required to make it appear there.
+ 
+The single most important property of this flow: when a proposal is denied  a cap
+lowered live, a mandate scope exceeded  the specific reason is explained back to the
+user **inside the chat itself**, in plain language, not just recorded silently in a
+dashboard the user isn't looking at. This is what makes "explainable" a property of the
+actual checkout experience, not only of an audit log a merchant might check later.
+ 
+---
+ 
+## 12. Catalog Legibility: Does an Agent Actually See the Whole Catalog?
+ 
+Everything built so far assumes that if a product exists in the catalog and the
+checkout mechanism works, an agent will fairly consider it. That assumption was tested,
+not left unchecked.
+ 
+A small, honestly-scoped measurement runs a fixed set of natural-language shopping
+goals against the real current catalog, repeated across a modest number of trials per
+goal, recording exactly which item an LLM picked each time  including recording a
+failed or invalid pick as a real result, not discarding it. From this: a plain pick-rate
+per item per goal (shown as raw counts, e.g. `3/10`, never dressed up as a percentage
+alone), a list of items that were shown to the agent but never once chosen across all
+trials for a goal, and an informally-stated observation about whether earlier-listed
+items were picked disproportionately often.
+ 
+This is deliberately not presented with statistical machinery the sample size can't
+support  no confidence intervals, no significance testing. It's stated as a directional
+signal, at exactly the confidence level a run of this size earns, with the sample size
+shown next to every number on the dashboard rather than hidden behind a polished-looking
+statistic. The panel presenting this is visually and structurally separated from the
+rest of the dashboard, labeled plainly as a one-time measurement, not a live monitor.
+ 
+---
+ 
+## 13. Graceful Failure  Demonstrated, Not Just Claimed
+ 
+The problem statement asks for one failure handled gracefully. Vyapar has several,
+demonstrated live, each producing a distinct, correctly-explained ledger entry rather
+than a generic error:
+ 
+- **Per-transaction cap exceeded**  lower the merchant's cap below a product's price,
+  attempt the purchase, watch it denied with the specific amount and limit stated.
+- **Mandate scope exceeded**  a mandate authorized for one category or amount is used
+  to attempt a purchase outside that scope, denied with `MANDATE_SCOPE_EXCEEDED`,
+  distinct from a simple expiry.
+- **Mandate expired or revoked**  revoke an active mandate from the dashboard, and the
+  very next attempt under it fails immediately, distinctly labeled from a scope
+  failure.
+- **Upsell addon exceeding remaining mandate scope**  a successful base purchase
+  followed by an addon offer that would push total spend past what the mandate still
+  permits, denied on its own merits even though the base purchase just succeeded.
+- **Merchant not opted in**  with AI agent transactability toggled off from the
+  dashboard, any external proposal is denied immediately, before even reaching the
+  six-check gateway, with a clear, distinct reason.
+Every one of these has been triggered on demand, and every one surfaces its specific
+reason both in the dashboard's audit ledger and, where relevant, conversationally inside
+the actual agent interface being used (Claude Desktop)  not only in a log a merchant
+would need to go looking for separately.
+ 
+---
+ 
+## 14. The Dashboard
+ 
+The dashboard's role changed over the course of this project: it began as a debugging
+console for the builder, and was deliberately redesigned once the underlying system was
+complete, into something a merchant or a judge could read at a glance without narration.
+ 
+Structurally, it presents as a set of distinct registers rather than an undifferentiated
+grid: the audit ledger itself, styled as ruled rows with a stamp-style mark
+distinguishing approved from denied decisions rather than a scattering of colored status
+badges; merchant controls for policy limits, catalog connection, and mandate
+issuance/revocation; a merchant-owned orders and customers view, with linked upsell
+pairs shown as a connected result rather than two unrelated rows; and a protocol-surface
+panel exposing the MCP endpoint, discovery manifest, webhook receiver, and the catalog
+legibility findings.
+ 
+A consistent typographic rule runs through all of it: genuine system data  amounts,
+order and mandate IDs, timestamps, endpoint URLs, batch identifiers  is visually
+distinguished from narrative and explanatory text, so a real audit reference reads as
+exactly that, not as debug output that leaked into the interface. Every control and
+action that existed in the dashboard's earlier, denser form remains fully reachable;
+nothing was cut in the course of making it presentable.
+ 
+---
+ 
+## 15. 💀💀💀Real-World Evidence and Rollout Path (Small Thesis Behind the Product)
+ 
+This project's central claim  that a merchant becoming AI-transactable is mostly an
+onboarding and trust problem, not a technical one  isn't speculative; it's grounded in
+what's actually happened in the market this year.
+ 
+OpenAI's first attempt at exactly this category of product, Instant Checkout (launched
+with Shopify and Etsy in September 2025), reached fewer than 15 live merchants out of
+over a million eligible ones within six months, and was shelved before a relaunch in
+February 2026 as "Buy it in ChatGPT." The bottleneck wasn't protocol capability  the
+checkout mechanism worked  it was that almost no merchant actually integrated it.
+ 
+Separately, GoKwik and PayU launched a live, named, multi-brand D2C agentic-checkout
+experience inside ChatGPT in India in July 2026, and their own repeated framing across
+every announcement is close to a checklist of the exact frictions that sank Instant
+Checkout's first attempt: merchants join with no engineering work, no new integration,
+and no separate listing fee, and keep full ownership of their catalogue, customer, and
+conversion data. That last guarantee  data and customer-relationship ownership  is
+precisely what Section 5's merchant-owned orders and customers tables are a direct,
+working answer to, not just a description of.
+ 
+The realistic deployment shape this project follows: **NPCI defines agent-native
+delegation primitives at the UPI rail level (UPI Circle, UPI Reserve  both still
+"upcoming" even in GoKwik's own live announcements) → a platform layer (Razorpay, or a
+GoKwik-style enabler built on top of a PSP) implements the policy gateway, mandate
+system, and merchant onboarding once, as a product → individual merchants opt in
+through a settings toggle, connecting an already-existing catalog, writing zero code.**
+Vyapar is a working prototype of that middle layer, built ahead of the bottom layer
+being finalized  which is stated here as exactly what it is, not oversold as more.
+ 
+---
+ 
+## 16. Tech Stack
+ 
+| Category | Technologies Used |
+| :--- | :--- |
+| **Mastermind** | Claude code (Powered by me ) |
+| **Backend & API** | Node.js, Express, TypeScript, Zod |
+| **Database** | SQLite (`better-sqlite3`) |
+| **Payments** | Razorpay Node.js SDK |
+| **AI / LLM** | AWS Bedrock SDK, Model Context Protocol (MCP) |
+| **Frontend Dashboard** | React, Vite, TailwindCSS, Framer Motion |
+| **Tooling** | esbuild, Vite, tsc, concurrently |
+| **Pilot** | Shopify |
 
-- Server running (`npm run dev`)
-- Dashboard open (`http://localhost:5173`)
-- Claude Desktop open with Vyapar MCP connected
-- A second terminal ready for the external buyer
 
-### Part 1 — Growth: Upsell with measured revenue uplift (Claude Desktop)
 
-1. **Issue a mandate from the dashboard**: Agent = Buyer, Max = ₹3,000, Categories = all, Expiry = 30 min.
-
-2. **Type in Claude Desktop**:
-   > "Buy me the Anti-Dandruff Shampoo from Vyapar."
-
-3. **Narrate as Claude works**: Claude calls `get_active_mandate`, then `browse_catalog`, then `submit_purchase_proposal` for the shampoo (₹380). The response includes a `suggested_addon` field — a deterministic pairing from the catalog, not an LLM decision.
-
-4. **Claude offers the addon**: It will say something like "Your shampoo is ordered! By the way, the Nourishing Conditioner (₹420) pairs well with it — would you like to add it?"
-
-5. **Accept the addon**: Say yes. Claude calls `submit_addon_proposal`. This goes through the exact same 6+1 policy checks — the base purchase does NOT pre-authorize the addon.
-
-6. **Switch to the dashboard — Orders tab**: The shampoo and conditioner appear grouped together with a computed line:
-   > ₹380 base + ₹420 addon = ₹800 — **111% uplift**
-
-   Say: "That uplift number is the direct answer to 'grow the merchant's revenue.' The suggestion was deterministic — the catalog said these items pair. Claude decided how to phrase it, not what qualifies as a pairing."
-
-### Part 1b — Growth denial (optional, 15 seconds)
-
-7. If you want to show the gateway saying "no" to an upsell: before Part 1, issue a tighter mandate (₹400 cap instead of ₹3,000). The shampoo (₹380) passes, the addon suggestion appears (conditioner, ₹420), but when you accept it, the gateway denies with `MANDATE_SCOPE_EXCEEDED`. Claude explains conversationally: "The conditioner costs ₹420, which exceeds your ₹400 spending limit."
-
-   Say: "The upsell agent can be told no by the same gateway as everything else. Growth is bounded, not unbounded."
-
-### Part 2 — Agent-to-Agent: Independent external buyer (second terminal)
-
-8. **In the second terminal**, run:
-   ```bash
-   npm run external-buyer -- "Buy me a nice skincare gift under 700 rupees"
-   ```
-
-9. **Narrate the output as it scrolls**:
-   - "This is a completely separate process. Zero shared code with the server."
-   - "It discovered the merchant through the `.well-known` manifest — same way any AI agent on the internet would."
-   - "It connected to the MCP server, browsed the catalog, and made its own LLM decision about what to buy — using AWS Bedrock, not the same Claude instance."
-   - "Now it's submitting a purchase proposal through the same gateway..."
-
-10. **Switch to the dashboard**: A new order appears with **MCP EXTERNAL** badge, alongside the upsell-grouped orders from Part 1.
-
-### Part 3 — One ledger, two agents, same checks (dashboard)
-
-11. **Point to the Orders tab**: Both sets of transactions visible — the upsell pair (UPSELL badge, uplift percentage) and the external buyer's order (MCP EXTERNAL badge). Different agents, different purposes, different code paths.
-
-12. **Point to the Ledger tab**: Every row — approved and denied — shows the same 6+1 check pipeline. Expand any row to confirm.
-
-13. **Closing line**:
-    > "Two different agents, two different purposes — one grows revenue, one proves the merchant is reachable by any AI buyer — both gated by the exact same policy layer, both fully audited. That's the complete answer to 'AI Growth and Agentic Commerce.'"
-
-### Timing
-
-- Part 1 (upsell purchase + addon): ~60 sec
-- Part 2 (external buyer): ~30 sec
-- Part 3 (dashboard walkthrough + closing): ~30 sec
-- **Total: under 2 minutes**
-
-### Fallbacks
-
-- If Claude Desktop is slow or asks clarifying questions, answer naturally — the upsell suggestion comes from the server response, not from Claude's initiative, so it will always appear.
-- If the external buyer's Bedrock LLM call fails (network, quota), show the successful run from pre-demo testing — the ledger entry is already there with the correct source attribution.
-- If a mandate expires mid-demo, issue a fresh one from the dashboard — takes 5 seconds.
+## Made by Dhruv Mali, 5x National level hackathon winner🏆🏆, 2L+ in prizes, 2x startup founder and failure, 2.5L+ in funding, Nasa space apps global 🌍 nominee, National finalist in Google hackathon'26.

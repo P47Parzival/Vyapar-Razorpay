@@ -45,7 +45,7 @@ function App() {
             </span>
           </div>
           <p className="font-body text-xs text-ink-muted hidden sm:block tracking-wide">
-            Agentic Commerce Dashboard
+            <p className="text-amber-900 animate-pulse">(No sign in sign up required, because this is a test product for judges)</p>Agentic Commerce Dashboard
           </p>
         </div>
 
@@ -57,8 +57,8 @@ function App() {
                 key={tab.key}
                 onClick={() => setActiveTab(tab.key)}
                 className={`font-body text-sm px-4 py-2.5 transition-colors relative ${activeTab === tab.key
-                    ? 'text-ink font-medium'
-                    : 'text-ink-muted hover:text-ink'
+                  ? 'text-ink font-medium'
+                  : 'text-ink-muted hover:text-ink'
                   }`}
               >
                 {tab.label}
