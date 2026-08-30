@@ -50,9 +50,9 @@ function convertToolDefs(tools: ToolDefinition[]): Tool[] {
     toolSpec: {
       name: t.name,
       description: t.description,
-      inputSchema: { json: t.inputSchema },
+      inputSchema: { json: t.inputSchema as Record<string, unknown> },
     },
-  }));
+  } as Tool));
 }
 
 export async function callLlm(

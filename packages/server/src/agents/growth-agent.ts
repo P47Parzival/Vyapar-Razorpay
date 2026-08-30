@@ -157,7 +157,7 @@ Please analyze the completed order, identify a good cross-sell or upsell opportu
         // Add assistant message with tool use, then tool result
         messages.push({
           role: 'assistant',
-          content: [{ toolUse: { toolUseId: toolCall.toolUseId, name: toolCall.name, input: toolCall.input } }],
+          content: [{ toolUse: { toolUseId: toolCall.toolUseId, name: toolCall.name, input: toolCall.input as any } }],
         });
         messages.push(buildToolResultMessage(toolCall.toolUseId, {
           verdict: gatewayResult.decision.verdict,
