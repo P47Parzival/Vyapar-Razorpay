@@ -2,8 +2,9 @@ import { Router } from 'express';
 import { getAllCatalogItems, getCatalogItem, getCatalogByCategory } from './catalog.js';
 const router = Router();
 // Agent-readable catalog endpoint (schema.org-inspired shape)
-router.get('/catalog', (_req, res) => {
-    const items = getAllCatalogItems();
+router.get('/catalog', (req, res) => {
+    const merchantId = req.query.merchant_id;
+    const items = getAllCatalogItems(merchantId);
     const products = items.map(item => ({
         '@type': 'Product',
         id: item.id,
@@ -19,11 +20,17 @@ router.get('/catalog', (_req, res) => {
         },
         category: item.category,
         relatedProducts: item.pairs_with_ids,
+        source_connection_id: item.source_connection_id,
+        ...(item.source_connection_id ? {
+            catalog_source: 'live_shopify_pilot',
+            checkout_mode: 'razorpay_test',
+            checkout_note: 'Real product data from connected Shopify store. Checkout uses Razorpay test mode - no real funds transferred.',
+        } : {}),
     }));
     res.json({
         '@context': 'https://schema.org',
         '@type': 'ItemList',
-        merchant: 'vyapar-demo-store',
+        merchant: merchantId || 'all',
         numberOfItems: products.length,
         itemListElement: products,
     });

@@ -49,6 +49,7 @@ const SUBMIT_PROPOSAL_TOOL: ToolDefinition = {
 
 export interface GrowthAgentScenario {
   type: 'cart_recovery' | 'upsell';
+  merchantId: string;
   context: Record<string, unknown>;
 }
 
@@ -61,8 +62,9 @@ export interface GrowthAgentResult {
 }
 
 export async function runGrowthAgent(scenario: GrowthAgentScenario): Promise<GrowthAgentResult> {
-  const catalog = getAllCatalogItems();
-  const policy = getPolicyConfig('default');
+  const merchantId = scenario.merchantId;
+  const catalog = getAllCatalogItems(merchantId);
+  const policy = getPolicyConfig(merchantId);
 
   let userMessage: string;
 
@@ -130,7 +132,7 @@ Please analyze the completed order, identify a good cross-sell or upsell opportu
           action: input.action as string,
           amount_paise: input.amount_paise as number,
           currency: 'INR',
-          merchant_id: 'default',
+          merchant_id: merchantId,
           counterparty: (input.counterparty as string) || 'growth_agent_session',
           category: input.category as string,
           requested_at: new Date().toISOString(),

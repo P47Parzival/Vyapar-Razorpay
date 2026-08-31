@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useMerchant } from '../MerchantContext';
 
 interface CatalogItem {
   id: string;
@@ -15,6 +16,7 @@ interface CatalogItem {
 }
 
 export default function ProductsCatalog() {
+  const { apiUrl, merchantId } = useMerchant();
   const [items, setItems] = useState<CatalogItem[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
@@ -27,7 +29,7 @@ export default function ProductsCatalog() {
       const params = new URLSearchParams();
       if (selectedCategory !== 'all') params.set('category', selectedCategory);
       if (searchQuery.trim()) params.set('search', searchQuery.trim());
-      const res = await fetch(`/api/catalog-dashboard?${params}`);
+      const res = await fetch(apiUrl(`/api/catalog-dashboard?${params}`));
       const data = await res.json();
       setItems(data.items || []);
     } catch { /* ignore */ }
@@ -36,14 +38,14 @@ export default function ProductsCatalog() {
 
   const fetchCategories = async () => {
     try {
-      const res = await fetch('/api/categories');
+      const res = await fetch(apiUrl('/api/categories'));
       const data = await res.json();
       setCategories(data.categories || []);
     } catch { /* ignore */ }
   };
 
-  useEffect(() => { fetchCategories(); }, []);
-  useEffect(() => { fetchItems(); }, [selectedCategory, searchQuery]);
+  useEffect(() => { fetchCategories(); }, [merchantId]);
+  useEffect(() => { fetchItems(); }, [selectedCategory, searchQuery, merchantId]);
 
   const grouped = items.reduce<Record<string, CatalogItem[]>>((acc, item) => {
     const cat = item.category;

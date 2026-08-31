@@ -42,15 +42,26 @@ export function createMcpServer(): McpServer {
     description: 'Browse the merchant catalog. Returns all active products with prices, categories, stock levels, and related product suggestions.',
     inputSchema: {
       category: z.string().optional().describe('Optional: filter by category. Browse without this parameter first to see all available categories.'),
+      merchant_id: z.string().optional().describe('Optional: filter by merchant. Omit to see products from all opted-in merchants.'),
     },
-  }, async ({ category }) => {
-    const items = getAllCatalogItems();
+  }, async ({ category, merchant_id: reqMerchantId }) => {
+    const items = getAllCatalogItems(reqMerchantId);
     const filtered = category ? items.filter(i => i.category === category) : items;
     const inStock = filtered.filter(i => i.stock > 0);
+
+    // Look up merchant display names
+    const merchantIds = [...new Set(inStock.map(i => i.merchant_id))];
+    const merchantNames: Record<string, string> = {};
+    for (const mid of merchantIds) {
+      const row = db.prepare('SELECT display_name FROM merchants WHERE id = ?').get(mid) as { display_name: string } | undefined;
+      merchantNames[mid] = row?.display_name || mid;
+    }
 
     const catalog = inStock.map(i => {
       const item: any = {
         id: i.id,
+        merchant_id: i.merchant_id,
+        merchant_name: merchantNames[i.merchant_id],
         name: i.title,
         description: i.description,
         price_rupees: i.price_paise / 100,
@@ -108,6 +119,7 @@ export function createMcpServer(): McpServer {
     title: 'Submit Purchase Proposal',
     description: 'Submit a purchase proposal to the Policy Gateway. The gateway checks the proposal against merchant policies (spending caps, velocity limits, category allowlists, mandate validity) and either approves (executing on Razorpay test mode) or denies with a structured reason code and explanation. Call get_active_mandate first to obtain the mandate_token and check your spending scope. This is the ONLY way to transact with this merchant.',
     inputSchema: {
+      merchant_id: z.string().describe('The merchant_id of the merchant to purchase from (shown in browse_catalog results)'),
       mandate_token: z.string().describe('The mandate_id from get_active_mandate response'),
       action: z.enum(['create_payment_link', 'create_order']).describe('The Razorpay action to perform'),
       amount_paise: z.number().describe('Amount in paise (100 paise = ₹1). Must match catalog price.'),
@@ -117,7 +129,7 @@ export function createMcpServer(): McpServer {
       description: z.string().optional().describe('Description of what is being purchased'),
       item_ids: z.array(z.string()).optional().describe('Catalog item IDs being purchased'),
     },
-  }, async ({ mandate_token, action, amount_paise, category, counterparty, agent_reasoning, description, item_ids }) => {
+  }, async ({ merchant_id: merchantId, mandate_token, action, amount_paise, category, counterparty, agent_reasoning, description, item_ids }) => {
     if (!mandate_token || mandate_token.trim() === '') {
       return {
         content: [{ type: 'text' as const, text: JSON.stringify({ error: 'mandate_token is required' }) }],
@@ -133,7 +145,7 @@ export function createMcpServer(): McpServer {
         action,
         amount_paise,
         currency: 'INR',
-        merchant_id: 'default',
+        merchant_id: merchantId,
         counterparty: counterparty || 'external_agent',
         category,
         requested_at: new Date().toISOString(),
@@ -191,6 +203,7 @@ export function createMcpServer(): McpServer {
     title: 'Submit Addon Purchase',
     description: 'Submit an addon/upsell purchase linked to a previous order. Use this when a successful purchase returned a suggested_addon field and the buyer wants it. The addon goes through the SAME policy checks as any other proposal - it is NOT pre-authorized by the original purchase. If accepting it would exceed the mandate cap, it will be denied.',
     inputSchema: {
+      merchant_id: z.string().describe('The merchant_id of the merchant this addon belongs to'),
       mandate_token: z.string().describe('The mandate_id from get_active_mandate response'),
       original_order_id: z.string().describe('The order_id from the original purchase response'),
       original_proposal_id: z.string().describe('The proposal_id from the original purchase (for traceability)'),
@@ -198,7 +211,7 @@ export function createMcpServer(): McpServer {
       counterparty: z.string().describe('Identifier of the buyer/customer'),
       agent_reasoning: z.string().describe('Why the buyer wants this addon'),
     },
-  }, async ({ mandate_token, original_order_id, original_proposal_id, addon_item_id, counterparty, agent_reasoning }) => {
+  }, async ({ merchant_id: merchantId, mandate_token, original_order_id, original_proposal_id, addon_item_id, counterparty, agent_reasoning }) => {
     if (!mandate_token || mandate_token.trim() === '') {
       return {
         content: [{ type: 'text' as const, text: JSON.stringify({ error: 'mandate_token is required' }) }],
@@ -222,7 +235,7 @@ export function createMcpServer(): McpServer {
         action: 'create_order',
         amount_paise: addonItem.price_paise,
         currency: 'INR',
-        merchant_id: 'default',
+        merchant_id: merchantId,
         counterparty: counterparty || 'external_agent',
         category: addonItem.category,
         requested_at: new Date().toISOString(),
@@ -269,13 +282,19 @@ export function createMcpServer(): McpServer {
     title: 'Get Active Mandate',
     description: 'Check if there is an active spending mandate authorizing this agent to transact. Call this BEFORE submitting a purchase proposal to discover your current authorization scope (max amount, allowed categories, expiry). Returns the mandate details if one exists, or a clear "no active mandate" response if not. This tool is read-only — it cannot create or modify mandates.',
     inputSchema: {
+      merchant_id: z.string().optional().describe('Optional: filter by merchant. Returns mandates for the specified merchant.'),
       principal: z.string().optional().describe('Optional: filter by principal (default returns any active mandate)'),
     },
-  }, async ({ principal }) => {
-    let query = `SELECT id, agent_id, principal, scope_max_amount_paise, scope_category_json, expires_at, issued_by, consent_method, granted_at
+  }, async ({ merchant_id: reqMerchantId, principal }) => {
+    let query = `SELECT id, merchant_id, agent_id, principal, scope_max_amount_paise, scope_category_json, expires_at, issued_by, consent_method, granted_at
       FROM mandates
       WHERE revoked = 0 AND expires_at > datetime('now')`;
     const params: string[] = [];
+
+    if (reqMerchantId) {
+      query += ' AND merchant_id = ?';
+      params.push(reqMerchantId);
+    }
 
     if (principal) {
       query += ' AND principal = ?';
@@ -304,6 +323,7 @@ export function createMcpServer(): McpServer {
         text: JSON.stringify({
           has_active_mandate: true,
           mandate_id: row.id,
+          merchant_id: row.merchant_id,
           agent_id: row.agent_id,
           scope_max_amount_paise: row.scope_max_amount_paise,
           scope_max_amount_rupees: row.scope_max_amount_paise / 100,

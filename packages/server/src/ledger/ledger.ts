@@ -5,6 +5,7 @@ import { generateExplanation } from './explain.js';
 
 export interface LedgerRow {
   id: string;
+  merchant_id: string;
   timestamp: string;
   agent_type: string;
   proposal_json: string;
@@ -30,6 +31,7 @@ export function writeLedgerEntry(
 
   const row: LedgerRow = {
     id,
+    merchant_id: proposal.merchant_id,
     timestamp,
     agent_type: proposal.agent_type,
     proposal_json: JSON.stringify(proposal),
@@ -44,11 +46,11 @@ export function writeLedgerEntry(
   };
 
   db.prepare(
-    `INSERT INTO ledger (id, timestamp, agent_type, proposal_json, checks_json, decision_json,
+    `INSERT INTO ledger (id, merchant_id, timestamp, agent_type, proposal_json, checks_json, decision_json,
      razorpay_call_json, razorpay_response_json, final_status, human_readable_explanation, amount_paise, category)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).run(
-    row.id, row.timestamp, row.agent_type, row.proposal_json, row.checks_json,
+    row.id, row.merchant_id, row.timestamp, row.agent_type, row.proposal_json, row.checks_json,
     row.decision_json, row.razorpay_call_json, row.razorpay_response_json,
     row.final_status, row.human_readable_explanation, row.amount_paise, row.category
   );
@@ -56,7 +58,12 @@ export function writeLedgerEntry(
   return row;
 }
 
-export function getLedgerEntries(limit: number = 50, offset: number = 0): LedgerRow[] {
+export function getLedgerEntries(limit: number = 50, offset: number = 0, merchantId?: string): LedgerRow[] {
+  if (merchantId) {
+    return db.prepare(
+      'SELECT * FROM ledger WHERE merchant_id = ? ORDER BY timestamp DESC LIMIT ? OFFSET ?'
+    ).all(merchantId, limit, offset) as LedgerRow[];
+  }
   return db.prepare(
     'SELECT * FROM ledger ORDER BY timestamp DESC LIMIT ? OFFSET ?'
   ).all(limit, offset) as LedgerRow[];
@@ -66,9 +73,14 @@ export function getLedgerEntry(id: string): LedgerRow | null {
   return (db.prepare('SELECT * FROM ledger WHERE id = ?').get(id) as LedgerRow) || null;
 }
 
-export function getLedgerEntriesSince(sinceId: string): LedgerRow[] {
+export function getLedgerEntriesSince(sinceId: string, merchantId?: string): LedgerRow[] {
   const refRow = db.prepare('SELECT timestamp FROM ledger WHERE id = ?').get(sinceId) as { timestamp: string } | undefined;
-  if (!refRow) return getLedgerEntries(50);
+  if (!refRow) return getLedgerEntries(50, 0, merchantId);
+  if (merchantId) {
+    return db.prepare(
+      'SELECT * FROM ledger WHERE timestamp > ? AND merchant_id = ? ORDER BY timestamp ASC'
+    ).all(refRow.timestamp, merchantId) as LedgerRow[];
+  }
   return db.prepare(
     'SELECT * FROM ledger WHERE timestamp > ? ORDER BY timestamp ASC'
   ).all(refRow.timestamp) as LedgerRow[];

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useMerchant } from '../MerchantContext';
 
 interface PolicyConfig {
   merchant_id: string;
@@ -19,6 +20,7 @@ interface EditState {
 }
 
 export default function PolicyPanel() {
+  const { apiUrl, merchantId } = useMerchant();
   const [policy, setPolicy] = useState<PolicyConfig | null>(null);
   const [saving, setSaving] = useState(false);
   const [edit, setEdit] = useState<EditState>({
@@ -32,11 +34,11 @@ export default function PolicyPanel() {
 
   useEffect(() => {
     fetchPolicy();
-  }, []);
+  }, [merchantId]);
 
   const fetchPolicy = async () => {
     try {
-      const res = await fetch('/api/policy');
+      const res = await fetch(apiUrl('/api/policy'));
       const data = await res.json();
       setPolicy(data);
       setEdit({
@@ -52,7 +54,7 @@ export default function PolicyPanel() {
   const updateField = async (field: string, patchBody: Record<string, number>) => {
     setSaving(true);
     try {
-      const res = await fetch('/api/policy', {
+      const res = await fetch(apiUrl('/api/policy'), {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(patchBody),

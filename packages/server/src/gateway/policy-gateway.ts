@@ -176,8 +176,8 @@ function recordOrderAndCustomer(proposal: Proposal, ledgerId: string, relatedOrd
   const source = getSourceFromProposal(proposal);
 
   const existingCustomer = db.prepare(
-    'SELECT id FROM customers WHERE identifier = ?'
-  ).get(identifier) as { id: string } | undefined;
+    'SELECT id FROM customers WHERE identifier = ? AND merchant_id = ?'
+  ).get(identifier, proposal.merchant_id) as { id: string } | undefined;
 
   let customerId: string;
 
@@ -193,18 +193,18 @@ function recordOrderAndCustomer(proposal: Proposal, ledgerId: string, relatedOrd
   } else {
     customerId = `cust_${randomUUID().slice(0, 12)}`;
     db.prepare(
-      `INSERT INTO customers (id, identifier, first_seen_at, last_purchase_at, total_spent_paise, order_count)
-       VALUES (?, ?, ?, ?, ?, 1)`
-    ).run(customerId, identifier, now, now, proposal.amount_paise);
+      `INSERT INTO customers (id, merchant_id, identifier, first_seen_at, last_purchase_at, total_spent_paise, order_count)
+       VALUES (?, ?, ?, ?, ?, ?, 1)`
+    ).run(customerId, proposal.merchant_id, identifier, now, now, proposal.amount_paise);
   }
 
   const orderId = `order_${randomUUID().slice(0, 12)}`;
   const itemIds = (proposal as any).item_ids || [];
 
   db.prepare(
-    `INSERT INTO orders (id, customer_id, ledger_id, item_ids_json, amount_paise, category, source, related_order_id, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
-  ).run(orderId, customerId, ledgerId, JSON.stringify(itemIds), proposal.amount_paise, proposal.category, source, relatedOrderId, now);
+    `INSERT INTO orders (id, merchant_id, customer_id, ledger_id, item_ids_json, amount_paise, category, source, related_order_id, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(orderId, proposal.merchant_id, customerId, ledgerId, JSON.stringify(itemIds), proposal.amount_paise, proposal.category, source, relatedOrderId, now);
 
   return orderId;
 }

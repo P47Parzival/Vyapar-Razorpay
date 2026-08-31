@@ -13,13 +13,15 @@ export function checkIdempotency(proposal: Proposal): PolicyCheckResult {
 
   const duplicate = db.prepare(
     `SELECT id, timestamp FROM ledger
-     WHERE agent_type = ?
+     WHERE merchant_id = ?
+       AND agent_type = ?
        AND json_extract(proposal_json, '$.action') = ?
        AND amount_paise = ?
        AND json_extract(proposal_json, '$.counterparty') = ?
        AND timestamp > ?
      LIMIT 1`
   ).get(
+    proposal.merchant_id,
     proposal.agent_type,
     proposal.action,
     proposal.amount_paise,

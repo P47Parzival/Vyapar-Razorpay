@@ -4,8 +4,9 @@ import { getAllCatalogItems, getCatalogItem, getCatalogByCategory } from './cata
 const router = Router();
 
 // Agent-readable catalog endpoint (schema.org-inspired shape)
-router.get('/catalog', (_req, res) => {
-  const items = getAllCatalogItems();
+router.get('/catalog', (req, res) => {
+  const merchantId = req.query.merchant_id as string | undefined;
+  const items = getAllCatalogItems(merchantId);
 
   const products = items.map(item => ({
     '@type': 'Product',
@@ -33,7 +34,7 @@ router.get('/catalog', (_req, res) => {
   res.json({
     '@context': 'https://schema.org',
     '@type': 'ItemList',
-    merchant: 'vyapar-demo-store',
+    merchant: merchantId || 'all',
     numberOfItems: products.length,
     itemListElement: products,
   });

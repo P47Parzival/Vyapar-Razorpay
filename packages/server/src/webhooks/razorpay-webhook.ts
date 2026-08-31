@@ -111,8 +111,11 @@ async function handlePaymentCompleted(payload: RazorpayWebhookPayload) {
     });
   }
 
+  const merchantId = notes.merchant_id || 'default';
+
   const scenario: GrowthAgentScenario = {
     type: 'upsell',
+    merchantId,
     context: {
       customer_id: notes.counterparty || 'webhook_customer',
       customer_name: 'Customer',

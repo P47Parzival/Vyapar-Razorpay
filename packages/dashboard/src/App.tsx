@@ -10,14 +10,16 @@ import MandatePanel from './components/MandatePanel';
 import MerchantOnboarding from './components/MerchantOnboarding';
 import CatalogAudit from './components/CatalogAudit';
 import ProductsCatalog from './components/ProductsCatalog';
+import { MerchantProvider, useMerchant } from './MerchantContext';
 import vyaparLogo from '../assets/vyapar_logo.png';
 import './dashboard.css';
 
 type Tab = 'dashboard' | 'connect' | 'products' | 'catalog-confidence';
 
-function App() {
+function DashboardInner() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<Tab>('dashboard');
+  const { merchantId, setMerchantId, merchants, merchantName } = useMerchant();
 
   const tabs: { key: Tab; label: string }[] = [
     { key: 'dashboard', label: 'Dashboard' },
@@ -46,9 +48,26 @@ function App() {
               MCP
             </span>
           </div>
-          <p className="font-body text-xs text-ink-muted hidden sm:block tracking-wide">
-            <p className="text-amber-900 animate-pulse">(No sign in sign up required, because this is a test product for judges)</p>Agentic Commerce Dashboard
-          </p>
+          <div className="flex items-center gap-3">
+            {merchants.length > 1 && (
+              <select
+                value={merchantId}
+                onChange={e => setMerchantId(e.target.value)}
+                className="font-body text-xs border rounded px-2 py-1"
+                style={{ borderColor: 'var(--ledger-line)', color: 'var(--ink)', background: '#fff' }}
+              >
+                {merchants.map(m => (
+                  <option key={m.id} value={m.id}>{m.display_name}</option>
+                ))}
+              </select>
+            )}
+            <div className="hidden sm:block text-right">
+              <p className="text-amber-900 animate-pulse font-body text-xs">(No sign in sign up required, because this is a test product for judges)</p>
+              <p className="font-body text-xs text-ink-muted tracking-wide">
+                Viewing: <span className="font-medium" style={{ color: 'var(--ink)' }}>{merchantName}</span>
+              </p>
+            </div>
+          </div>
         </div>
 
         {/* Tab navigation */}
@@ -76,10 +95,7 @@ function App() {
       <main className="max-w-7xl mx-auto px-4 py-6 space-y-8">
         {activeTab === 'dashboard' && (
           <>
-            {/* Summary Strip */}
             <RevenueCounter />
-
-            {/* Ledger + Orders & Customers */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6" style={{ height: '680px' }}>
               <div className="lg:col-span-2 flex flex-col min-h-0">
                 <LedgerFeed />
@@ -93,19 +109,14 @@ function App() {
 
         {activeTab === 'connect' && (
           <>
-            {/* Merchant Setup + Protocol Surface */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <MerchantOnboarding />
               <AgentAccessPanel />
             </div>
-
-            {/* Mandates + Policy Controls */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <MandatePanel />
               <PolicyPanel />
             </div>
-
-            {/* Growth Agent + AI Buyer Agent */}
             <AgentTriggers />
           </>
         )}
@@ -119,6 +130,14 @@ function App() {
         )}
       </main>
     </div>
+  );
+}
+
+function App() {
+  return (
+    <MerchantProvider>
+      <DashboardInner />
+    </MerchantProvider>
   );
 }
 

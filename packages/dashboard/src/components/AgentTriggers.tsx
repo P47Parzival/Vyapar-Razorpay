@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useMerchant } from '../MerchantContext';
 
 interface AgentResult {
   success: boolean;
@@ -9,6 +10,7 @@ interface AgentResult {
 }
 
 export default function AgentTriggers() {
+  const { apiUrl } = useMerchant();
   const [loading, setLoading] = useState<string | null>(null);
   const [lastResult, setLastResult] = useState<AgentResult | null>(null);
   const [shoppingRequest, setShoppingRequest] = useState('');
@@ -17,7 +19,7 @@ export default function AgentTriggers() {
     setLoading(label);
     setLastResult(null);
     try {
-      const res = await fetch(endpoint, {
+      const res = await fetch(apiUrl(endpoint), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: body ? JSON.stringify(body) : undefined,

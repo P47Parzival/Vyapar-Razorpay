@@ -15,8 +15,9 @@ export function checkVelocityCap(proposal: Proposal, policy: PolicyConfig): Poli
     `SELECT COALESCE(SUM(amount_paise), 0) as total_paise, COUNT(*) as txn_count
      FROM ledger
      WHERE final_status = 'executed'
+       AND merchant_id = ?
        AND timestamp >= ?`
-  ).get(todayStart.toISOString()) as SumRow;
+  ).get(proposal.merchant_id, todayStart.toISOString()) as SumRow;
 
   const dailyTotal = (row.total_paise || 0) + proposal.amount_paise;
   const dailyCount = row.txn_count + 1;

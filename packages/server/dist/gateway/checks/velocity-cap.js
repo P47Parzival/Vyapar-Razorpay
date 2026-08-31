@@ -5,7 +5,8 @@ export function checkVelocityCap(proposal, policy) {
     const row = db.prepare(`SELECT COALESCE(SUM(amount_paise), 0) as total_paise, COUNT(*) as txn_count
      FROM ledger
      WHERE final_status = 'executed'
-       AND timestamp >= ?`).get(todayStart.toISOString());
+       AND merchant_id = ?
+       AND timestamp >= ?`).get(proposal.merchant_id, todayStart.toISOString());
     const dailyTotal = (row.total_paise || 0) + proposal.amount_paise;
     const dailyCount = row.txn_count + 1;
     if (dailyTotal > policy.max_daily_velocity_paise) {

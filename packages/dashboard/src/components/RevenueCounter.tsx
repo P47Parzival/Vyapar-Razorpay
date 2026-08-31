@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useMerchant } from '../MerchantContext';
 
 interface LedgerEntry {
   agent_type: string;
@@ -8,12 +9,13 @@ interface LedgerEntry {
 }
 
 export default function RevenueCounter() {
+  const { apiUrl, merchantId } = useMerchant();
   const [stats, setStats] = useState({ recovered: 0, upsell: 0, buyer: 0 });
 
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        const res = await fetch('/api/ledger?limit=1000');
+        const res = await fetch(apiUrl('/api/ledger?limit=1000'));
         const data = await res.json();
         const entries = data.entries as LedgerEntry[];
 
@@ -43,7 +45,7 @@ export default function RevenueCounter() {
     fetchStats();
     const interval = setInterval(fetchStats, 5000);
     return () => clearInterval(interval);
-  }, []);
+  }, [merchantId]);
 
   const formatCurrency = (paise: number) => `₹${(paise / 100).toLocaleString('en-IN')}`;
 

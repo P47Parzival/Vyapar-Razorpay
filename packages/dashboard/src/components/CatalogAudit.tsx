@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useMerchant } from '../MerchantContext';
 
 interface PickRate {
   item_id: string;
@@ -58,16 +59,17 @@ function getDiscoveryLevel(picked: number, total: number): { label: string; colo
 }
 
 export default function CatalogAudit() {
+  const { apiUrl, merchantId } = useMerchant();
   const [data, setData] = useState<ApiResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [expandedGoal, setExpandedGoal] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch('/api/catalog-audit/findings')
+    fetch(apiUrl('/api/catalog-audit/findings'))
       .then(r => r.json())
       .then(d => { setData(d); setLoading(false); })
       .catch(() => setLoading(false));
-  }, []);
+  }, [merchantId]);
 
   if (loading) {
     return (

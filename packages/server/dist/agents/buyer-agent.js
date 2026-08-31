@@ -59,8 +59,8 @@ const SUBMIT_PROPOSAL_TOOL = {
         required: ['agent_reasoning', 'action', 'amount_paise', 'counterparty', 'category', 'description'],
     },
 };
-export async function runBuyerAgent(shoppingRequest) {
-    const policy = getPolicyConfig('default');
+export async function runBuyerAgent(shoppingRequest, merchantId = 'default') {
+    const policy = getPolicyConfig(merchantId);
     const userMessage = `SHOPPING REQUEST FROM CUSTOMER:
 "${shoppingRequest}"
 
@@ -98,7 +98,7 @@ Please help this customer shop. Start by browsing the catalog, then propose a pu
         const toolResults = [];
         for (const toolCall of response.toolCalls) {
             if (toolCall.name === 'browse_catalog') {
-                const catalog = getAllCatalogItems();
+                const catalog = getAllCatalogItems(merchantId);
                 const categoryFilter = toolCall.input.category;
                 const items = categoryFilter
                     ? catalog.filter(i => i.category === categoryFilter)
@@ -129,12 +129,13 @@ Please help this customer shop. Start by browsing the catalog, then propose a pu
                     action: input.action,
                     amount_paise: input.amount_paise,
                     currency: 'INR',
-                    merchant_id: 'default',
+                    merchant_id: merchantId,
                     counterparty: input.counterparty || 'buyer_agent_session',
                     category: input.category,
                     requested_at: new Date().toISOString(),
                     description: input.description,
                     item_ids: input.item_ids,
+                    triggered_by: 'internal',
                 });
                 result.proposal = proposal;
                 const gatewayResult = await processProposal(proposal);

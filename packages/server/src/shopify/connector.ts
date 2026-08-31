@@ -147,10 +147,11 @@ interface ConnectOptions {
   clientId?: string;
   clientSecret?: string;
   accessToken?: string;
+  merchantId?: string;
 }
 
 export async function connectShopifyStore(opts: ConnectOptions): Promise<ConnectResult> {
-  const { shopDomain } = opts;
+  const { shopDomain, merchantId = 'default' } = opts;
   let accessToken: string;
 
   if (opts.clientId && opts.clientSecret) {
@@ -177,13 +178,13 @@ export async function connectShopifyStore(opts: ConnectOptions): Promise<Connect
   const tokenEncrypted = encryptToken(credentialsToStore);
 
   db.prepare(
-    `INSERT INTO shopify_connections (id, shop_domain, access_token_encrypted, connected_at, last_synced_at, product_count, status)
-     VALUES (?, ?, ?, ?, ?, ?, 'active')`
-  ).run(connectionId, shopDomain, tokenEncrypted, now, now, products.length);
+    `INSERT INTO shopify_connections (id, merchant_id, shop_domain, access_token_encrypted, connected_at, last_synced_at, product_count, status)
+     VALUES (?, ?, ?, ?, ?, ?, ?, 'active')`
+  ).run(connectionId, merchantId, shopDomain, tokenEncrypted, now, now, products.length);
 
   const insertItem = db.prepare(
-    `INSERT OR IGNORE INTO catalog_items (id, title, description, price_paise, category, stock, pairs_with_ids, is_active, image_url, source_connection_id, shopify_product_id)
-     VALUES (?, ?, ?, ?, ?, ?, '[]', 1, ?, ?, ?)`
+    `INSERT OR IGNORE INTO catalog_items (id, merchant_id, title, description, price_paise, category, stock, pairs_with_ids, is_active, image_url, source_connection_id, shopify_product_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?, '[]', 1, ?, ?, ?)`
   );
 
   const importMany = db.transaction(() => {
@@ -202,6 +203,7 @@ export async function connectShopifyStore(opts: ConnectOptions): Promise<Connect
 
       insertItem.run(
         itemId,
+        merchantId,
         product.title,
         description || product.title,
         pricePaise,
@@ -218,7 +220,10 @@ export async function connectShopifyStore(opts: ConnectOptions): Promise<Connect
   return { connectionId, productsImported: products.length, shopName: validation.shopName || shopDomain };
 }
 
-export function getConnections() {
+export function getConnections(merchantId?: string) {
+  if (merchantId) {
+    return db.prepare('SELECT id, shop_domain, connected_at, last_synced_at, product_count, status FROM shopify_connections WHERE merchant_id = ? ORDER BY connected_at DESC').all(merchantId);
+  }
   return db.prepare('SELECT id, shop_domain, connected_at, last_synced_at, product_count, status FROM shopify_connections ORDER BY connected_at DESC').all();
 }
 
@@ -253,9 +258,12 @@ export async function syncShopifyConnection(connectionId: string): Promise<SyncR
   const products = await fetchShopifyProducts(conn.shop_domain, accessToken);
   const now = new Date().toISOString();
 
+  const conn_row = db.prepare('SELECT merchant_id FROM shopify_connections WHERE id = ?').get(connectionId) as { merchant_id: string } | undefined;
+  const syncMerchantId = conn_row?.merchant_id || 'default';
+
   const upsertItem = db.prepare(
-    `INSERT INTO catalog_items (id, title, description, price_paise, category, stock, pairs_with_ids, is_active, image_url, source_connection_id, shopify_product_id)
-     VALUES (?, ?, ?, ?, ?, ?, '[]', 1, ?, ?, ?)
+    `INSERT INTO catalog_items (id, merchant_id, title, description, price_paise, category, stock, pairs_with_ids, is_active, image_url, source_connection_id, shopify_product_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?, '[]', 1, ?, ?, ?)
      ON CONFLICT(id) DO UPDATE SET
        title = excluded.title,
        description = excluded.description,
@@ -286,7 +294,7 @@ export async function syncShopifyConnection(connectionId: string): Promise<SyncR
 
       const imageUrl = product.image?.src || null;
       const existing = db.prepare('SELECT id FROM catalog_items WHERE id = ?').get(itemId);
-      upsertItem.run(itemId, product.title, description || product.title, pricePaise, category, totalStock, imageUrl, connectionId, String(product.id));
+      upsertItem.run(itemId, syncMerchantId, product.title, description || product.title, pricePaise, category, totalStock, imageUrl, connectionId, String(product.id));
 
       if (existing) { updated++; } else { added++; }
     }

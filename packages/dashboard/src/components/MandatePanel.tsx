@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useMerchant } from '../MerchantContext';
 
 interface Mandate {
   id: string;
@@ -14,6 +15,7 @@ interface Mandate {
 }
 
 export default function MandatePanel() {
+  const { apiUrl, merchantId } = useMerchant();
   const [mandates, setMandates] = useState<Mandate[]>([]);
   const [allCategories, setAllCategories] = useState<string[]>([]);
   const [showForm, setShowForm] = useState(false);
@@ -28,11 +30,11 @@ export default function MandatePanel() {
   useEffect(() => {
     fetchMandates();
     fetchCategories();
-  }, []);
+  }, [merchantId]);
 
   const fetchCategories = async () => {
     try {
-      const res = await fetch('/api/categories');
+      const res = await fetch(apiUrl('/api/categories'));
       const data = await res.json();
       setAllCategories(data.categories);
       setForm(prev => prev.categories.length === 0 ? { ...prev, categories: data.categories } : prev);
@@ -41,7 +43,7 @@ export default function MandatePanel() {
 
   const fetchMandates = async () => {
     try {
-      const res = await fetch('/api/mandates');
+      const res = await fetch(apiUrl('/api/mandates'));
       const data = await res.json();
       setMandates(data.mandates);
     } catch { /* ignore */ }
@@ -50,7 +52,7 @@ export default function MandatePanel() {
   const issueMandate = async () => {
     setSubmitting(true);
     try {
-      await fetch('/api/mandates', {
+      await fetch(apiUrl('/api/mandates'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -68,7 +70,7 @@ export default function MandatePanel() {
   };
 
   const revokeMandate = async (id: string) => {
-    await fetch(`/api/mandates/${id}/revoke`, { method: 'POST' });
+    await fetch(apiUrl(`/api/mandates/${id}/revoke`), { method: 'POST' });
     await fetchMandates();
   };
 

@@ -1,3 +1,8 @@
+// Multi-tenancy: merchant_id is threaded through every check via proposal.merchant_id → getPolicyConfig(merchantId).
+// This demo runs a single tenant ('default') for clarity, but every check function is parameterized by merchant_id,
+// not hardcoded. In a real deployment, one platform instance serves many merchants, each with their own policy,
+// mandates, catalog, orders, and customers — the same way GoKwik serves hundreds of D2C brands from one layer.
+import { randomUUID } from 'node:crypto';
 import { getPolicyConfig } from './policy-config.js';
 import { checkMandate } from './checks/mandate.js';
 import { checkPerTransactionCap } from './checks/per-transaction-cap.js';
@@ -7,6 +12,7 @@ import { checkDiscountCeiling } from './checks/discount-ceiling.js';
 import { checkIdempotency } from './checks/idempotency.js';
 import { executeOnRazorpay } from '../razorpay/execution.js';
 import { writeLedgerEntry } from '../ledger/ledger.js';
+import db from '../db/client.js';
 const REASON_CODES = {
     mandate: 'MANDATE_EXPIRED',
     per_transaction_cap: 'PER_TRANSACTION_CAP_EXCEEDED',
@@ -23,6 +29,27 @@ function getReasonCode(check) {
 }
 export async function processProposal(proposal) {
     const policy = getPolicyConfig(proposal.merchant_id);
+    // Pre-check: is agent commerce enabled for this merchant?
+    if (!policy.agent_commerce_enabled) {
+        const now = new Date().toISOString();
+        const decision = {
+            proposal_id: proposal.proposal_id,
+            verdict: 'denied',
+            reason_code: 'MERCHANT_NOT_OPTED_IN',
+            reason_text: 'Agent commerce is disabled for this merchant. Enable it in the merchant settings.',
+            checks: [],
+            checked_at: now,
+        };
+        const outcome = {
+            proposal_id: proposal.proposal_id,
+            razorpay_action: null,
+            razorpay_response: null,
+            final_status: 'denied',
+            executed_at: now,
+        };
+        const ledgerRow = writeLedgerEntry(proposal, [], decision, outcome);
+        return { decision, outcome, ledgerRow };
+    }
     const checks = [];
     // Run checks in order, stop at first failure
     const checkFns = [
@@ -95,7 +122,53 @@ export async function processProposal(proposal) {
         };
     }
     const ledgerRow = writeLedgerEntry(proposal, checks, decision, outcome);
-    return { decision, outcome, ledgerRow };
+    let orderId;
+    if (outcome.final_status === 'executed') {
+        try {
+            orderId = recordOrderAndCustomer(proposal, ledgerRow.id, proposal.related_order_id || null);
+        }
+        catch (err) {
+            console.error('[Gateway] CRITICAL: Ledger row written but order/customer write failed:', err);
+        }
+    }
+    return { decision, outcome, ledgerRow, orderId };
+}
+function getSourceFromProposal(proposal) {
+    const tb = proposal.triggered_by;
+    if (tb === 'webhook')
+        return 'webhook';
+    if (tb === 'mcp_external')
+        return 'external_mcp_client';
+    if (tb === 'internal')
+        return 'internal_buyer_agent';
+    if (proposal.agent_type === 'growth')
+        return 'internal_growth_agent';
+    return 'internal_buyer_agent';
+}
+function recordOrderAndCustomer(proposal, ledgerId, relatedOrderId) {
+    const now = new Date().toISOString();
+    const identifier = proposal.counterparty || `anon_${randomUUID().slice(0, 8)}`;
+    const source = getSourceFromProposal(proposal);
+    const existingCustomer = db.prepare('SELECT id FROM customers WHERE identifier = ? AND merchant_id = ?').get(identifier, proposal.merchant_id);
+    let customerId;
+    if (existingCustomer) {
+        customerId = existingCustomer.id;
+        db.prepare(`UPDATE customers SET
+        last_purchase_at = ?,
+        total_spent_paise = total_spent_paise + ?,
+        order_count = order_count + 1
+      WHERE id = ?`).run(now, proposal.amount_paise, customerId);
+    }
+    else {
+        customerId = `cust_${randomUUID().slice(0, 12)}`;
+        db.prepare(`INSERT INTO customers (id, merchant_id, identifier, first_seen_at, last_purchase_at, total_spent_paise, order_count)
+       VALUES (?, ?, ?, ?, ?, ?, 1)`).run(customerId, proposal.merchant_id, identifier, now, now, proposal.amount_paise);
+    }
+    const orderId = `order_${randomUUID().slice(0, 12)}`;
+    const itemIds = proposal.item_ids || [];
+    db.prepare(`INSERT INTO orders (id, merchant_id, customer_id, ledger_id, item_ids_json, amount_paise, category, source, related_order_id, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(orderId, proposal.merchant_id, customerId, ledgerId, JSON.stringify(itemIds), proposal.amount_paise, proposal.category, source, relatedOrderId, now);
+    return orderId;
 }
 function buildRazorpayParams(proposal) {
     switch (proposal.action) {

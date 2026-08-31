@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useMerchant } from '../MerchantContext';
 import DecisionDetail from './DecisionDetail';
 
 interface LedgerEntry {
@@ -15,11 +16,12 @@ interface LedgerEntry {
 }
 
 export default function LedgerFeed() {
+  const { apiUrl, merchantId } = useMerchant();
   const [entries, setEntries] = useState<LedgerEntry[]>([]);
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   useEffect(() => {
-    const eventSource = new EventSource('/api/ledger/stream');
+    const eventSource = new EventSource(apiUrl('/api/ledger/stream'));
 
     eventSource.onmessage = (event) => {
       const data = JSON.parse(event.data);
@@ -38,7 +40,7 @@ export default function LedgerFeed() {
       eventSource.close();
       const poll = setInterval(async () => {
         try {
-          const res = await fetch('/api/ledger?limit=50');
+          const res = await fetch(apiUrl('/api/ledger?limit=50'));
           const data = await res.json();
           setEntries(data.entries);
         } catch { /* ignore */ }
@@ -47,7 +49,7 @@ export default function LedgerFeed() {
     };
 
     return () => eventSource.close();
-  }, []);
+  }, [merchantId]);
 
   const formatTime = (ts: string) => {
     const d = new Date(ts);

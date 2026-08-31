@@ -44,4 +44,40 @@ if (!catalogColNames.includes('source_connection_id')) {
   db.exec("ALTER TABLE catalog_items ADD COLUMN shopify_product_id TEXT DEFAULT NULL");
 }
 
+// Multi-tenant merchant_id migration (BUILD_PLAN8)
+if (!catalogColNames.includes('merchant_id')) {
+  db.exec("ALTER TABLE catalog_items ADD COLUMN merchant_id TEXT NOT NULL DEFAULT 'default'");
+}
+
+const mandateCols = db.prepare("PRAGMA table_info(mandates)").all() as { name: string }[];
+if (!mandateCols.map(c => c.name).includes('merchant_id')) {
+  db.exec("ALTER TABLE mandates ADD COLUMN merchant_id TEXT NOT NULL DEFAULT 'default'");
+}
+
+const ledgerCols = db.prepare("PRAGMA table_info(ledger)").all() as { name: string }[];
+if (!ledgerCols.map(c => c.name).includes('merchant_id')) {
+  db.exec("ALTER TABLE ledger ADD COLUMN merchant_id TEXT NOT NULL DEFAULT 'default'");
+}
+
+const orderCols = db.prepare("PRAGMA table_info(orders)").all() as { name: string }[];
+if (!orderCols.map(c => c.name).includes('merchant_id')) {
+  db.exec("ALTER TABLE orders ADD COLUMN merchant_id TEXT NOT NULL DEFAULT 'default'");
+}
+
+const customerCols = db.prepare("PRAGMA table_info(customers)").all() as { name: string }[];
+if (!customerCols.map(c => c.name).includes('merchant_id')) {
+  db.exec("ALTER TABLE customers ADD COLUMN merchant_id TEXT NOT NULL DEFAULT 'default'");
+}
+
+const shopifyConnCols = db.prepare("PRAGMA table_info(shopify_connections)").all() as { name: string }[];
+if (!shopifyConnCols.map(c => c.name).includes('merchant_id')) {
+  db.exec("ALTER TABLE shopify_connections ADD COLUMN merchant_id TEXT NOT NULL DEFAULT 'default'");
+}
+
+db.exec("CREATE INDEX IF NOT EXISTS idx_ledger_merchant_id ON ledger(merchant_id)");
+db.exec("CREATE INDEX IF NOT EXISTS idx_orders_merchant_id ON orders(merchant_id)");
+db.exec("CREATE INDEX IF NOT EXISTS idx_customers_merchant_id ON customers(merchant_id)");
+db.exec("CREATE INDEX IF NOT EXISTS idx_catalog_items_merchant_id ON catalog_items(merchant_id)");
+db.exec("CREATE INDEX IF NOT EXISTS idx_mandates_merchant_id ON mandates(merchant_id)");
+
 export default db;

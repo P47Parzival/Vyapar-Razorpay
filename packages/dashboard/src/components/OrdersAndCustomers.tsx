@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useMerchant } from '../MerchantContext';
 
 interface Order {
   id: string;
@@ -55,14 +56,15 @@ function buildOrderGroups(orders: Order[]): OrderGroup[] {
 }
 
 export default function OrdersAndCustomers() {
+  const { apiUrl, merchantId } = useMerchant();
   const [orders, setOrders] = useState<Order[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [tab, setTab] = useState<'orders' | 'customers'>('orders');
 
   const fetchData = async () => {
     const [ordersRes, customersRes] = await Promise.all([
-      fetch('/api/orders?limit=20'),
-      fetch('/api/customers?limit=20'),
+      fetch(apiUrl('/api/orders?limit=20')),
+      fetch(apiUrl('/api/customers?limit=20')),
     ]);
     const ordersData = await ordersRes.json();
     const customersData = await customersRes.json();
@@ -74,7 +76,7 @@ export default function OrdersAndCustomers() {
     fetchData();
     const interval = setInterval(fetchData, 5000);
     return () => clearInterval(interval);
-  }, []);
+  }, [merchantId]);
 
   return (
     <div className="register flex flex-col h-full">

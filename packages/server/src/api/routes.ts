@@ -10,21 +10,35 @@ import { computeFindings } from '../catalog-audit/compute-findings.js';
 
 const router = Router();
 
+function getMerchantId(req: Request): string {
+  return (req.query.merchant_id as string) || (req.headers['x-merchant-id'] as string) || 'default';
+}
+
+// --- Merchant endpoints ---
+
+router.get('/merchants', (_req, res) => {
+  const rows = db.prepare('SELECT id, display_name, created_at FROM merchants ORDER BY created_at').all();
+  res.json({ merchants: rows });
+});
+
 // --- Policy endpoints ---
 
-router.get('/policy', (_req, res) => {
-  const config = getPolicyConfig('default');
+router.get('/policy', (req, res) => {
+  const merchantId = getMerchantId(req);
+  const config = getPolicyConfig(merchantId);
   res.json(config);
 });
 
 router.patch('/policy', (req, res) => {
+  const merchantId = getMerchantId(req);
   const updates = req.body;
-  const updated = updatePolicyConfig('default', updates);
+  const updated = updatePolicyConfig(merchantId, updates);
   res.json(updated);
 });
 
-router.get('/policy/public', (_req, res) => {
-  const config = getPolicyConfig('default');
+router.get('/policy/public', (req, res) => {
+  const merchantId = getMerchantId(req);
+  const config = getPolicyConfig(merchantId);
   res.json({
     max_per_transaction_rupees: config.max_per_transaction_paise / 100,
     max_daily_velocity_rupees: config.max_daily_velocity_paise / 100,
@@ -40,6 +54,7 @@ router.get('/policy/public', (_req, res) => {
 
 interface MandateRow {
   id: string;
+  merchant_id: string;
   agent_id: string;
   principal: string;
   granted_at: string;
@@ -51,8 +66,9 @@ interface MandateRow {
   consent_method: string;
 }
 
-router.get('/mandates', (_req, res) => {
-  const rows = db.prepare('SELECT * FROM mandates ORDER BY granted_at DESC').all() as MandateRow[];
+router.get('/mandates', (req, res) => {
+  const merchantId = getMerchantId(req);
+  const rows = db.prepare('SELECT * FROM mandates WHERE merchant_id = ? ORDER BY granted_at DESC').all(merchantId) as MandateRow[];
   const mandates = rows.map(r => ({
     ...r,
     scope_categories: JSON.parse(r.scope_category_json),
@@ -62,6 +78,7 @@ router.get('/mandates', (_req, res) => {
 });
 
 router.post('/mandates', (req, res) => {
+  const merchantId = getMerchantId(req);
   const { agent_id, scope_max_amount_paise, scope_categories, expiry_minutes, issued_by } = req.body;
 
   if (!agent_id || !['growth', 'buyer'].includes(agent_id)) {
@@ -76,17 +93,18 @@ router.post('/mandates', (req, res) => {
   const maxAmount = scope_max_amount_paise || 300000;
   let categories = scope_categories;
   if (!categories || categories.length === 0) {
-    const rows = db.prepare('SELECT DISTINCT category FROM catalog_items WHERE is_active = 1').all() as { category: string }[];
+    const rows = db.prepare('SELECT DISTINCT category FROM catalog_items WHERE is_active = 1 AND merchant_id = ?').all(merchantId) as { category: string }[];
     categories = rows.map(r => r.category);
   }
 
   db.prepare(
-    `INSERT INTO mandates (id, agent_id, principal, granted_at, expires_at, revoked, scope_max_amount_paise, scope_category_json, issued_by, consent_method)
-     VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?, 'dashboard_click')`
-  ).run(id, agent_id, 'merchant_default', now, expiresAt, maxAmount, JSON.stringify(categories), issued_by || 'merchant_owner');
+    `INSERT INTO mandates (id, merchant_id, agent_id, principal, granted_at, expires_at, revoked, scope_max_amount_paise, scope_category_json, issued_by, consent_method)
+     VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?, 'dashboard_click')`
+  ).run(id, merchantId, agent_id, `merchant_${merchantId}`, now, expiresAt, maxAmount, JSON.stringify(categories), issued_by || 'merchant_owner');
 
   res.json({
     id,
+    merchant_id: merchantId,
     agent_id,
     granted_at: now,
     expires_at: expiresAt,
@@ -112,39 +130,39 @@ router.post('/mandates/:id/revoke', (req, res) => {
 // --- Ledger endpoints ---
 
 router.get('/ledger', (req, res) => {
+  const merchantId = getMerchantId(req);
   const limit = parseInt(req.query.limit as string) || 50;
   const offset = parseInt(req.query.offset as string) || 0;
   const since = req.query.since as string | undefined;
 
   if (since) {
-    const entries = getLedgerEntriesSince(since);
+    const entries = getLedgerEntriesSince(since, merchantId);
     res.json({ entries, count: entries.length });
     return;
   }
 
-  const entries = getLedgerEntries(limit, offset);
+  const entries = getLedgerEntries(limit, offset, merchantId);
   res.json({ entries, count: entries.length });
 });
 
 router.get('/ledger/stream', (req: Request, res: Response) => {
+  const merchantId = getMerchantId(req);
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
   res.setHeader('X-Accel-Buffering', 'no');
   res.flushHeaders();
 
-  // Send current entries as initial data
-  const current = getLedgerEntries(20);
+  const current = getLedgerEntries(20, 0, merchantId);
   res.write(`data: ${JSON.stringify({ type: 'init', entries: current })}\n\n`);
 
-  // Poll for new entries every 2 seconds
   let lastId = current.length > 0 ? current[0].id : '';
 
   const interval = setInterval(() => {
     try {
-      const latest = getLedgerEntries(1);
+      const latest = getLedgerEntries(1, 0, merchantId);
       if (latest.length > 0 && latest[0].id !== lastId) {
-        const newEntries = lastId ? getLedgerEntriesSince(lastId) : latest;
+        const newEntries = lastId ? getLedgerEntriesSince(lastId, merchantId) : latest;
         lastId = latest[0].id;
         res.write(`data: ${JSON.stringify({ type: 'update', entries: newEntries })}\n\n`);
       }
@@ -178,14 +196,15 @@ router.get('/ledger/:id', (req, res) => {
 // --- Orders & Customers endpoints ---
 
 router.get('/orders', (req, res) => {
+  const merchantId = getMerchantId(req);
   const source = req.query.source as string | undefined;
   const limit = parseInt(req.query.limit as string) || 50;
 
   let rows;
   if (source) {
-    rows = db.prepare('SELECT * FROM orders WHERE source = ? ORDER BY created_at DESC LIMIT ?').all(source, limit);
+    rows = db.prepare('SELECT * FROM orders WHERE merchant_id = ? AND source = ? ORDER BY created_at DESC LIMIT ?').all(merchantId, source, limit);
   } else {
-    rows = db.prepare('SELECT * FROM orders ORDER BY created_at DESC LIMIT ?').all(limit);
+    rows = db.prepare('SELECT * FROM orders WHERE merchant_id = ? ORDER BY created_at DESC LIMIT ?').all(merchantId, limit);
   }
 
   const orders = (rows as any[]).map(r => ({
@@ -196,25 +215,28 @@ router.get('/orders', (req, res) => {
 });
 
 router.get('/customers', (req, res) => {
+  const merchantId = getMerchantId(req);
   const limit = parseInt(req.query.limit as string) || 50;
 
-  const rows = db.prepare('SELECT * FROM customers ORDER BY last_purchase_at DESC LIMIT ?').all(limit);
+  const rows = db.prepare('SELECT * FROM customers WHERE merchant_id = ? ORDER BY last_purchase_at DESC LIMIT ?').all(merchantId, limit);
   res.json({ customers: rows, count: (rows as any[]).length });
 });
 
-router.get('/categories', (_req, res) => {
-  const rows = db.prepare('SELECT DISTINCT category FROM catalog_items WHERE is_active = 1 ORDER BY category').all() as { category: string }[];
+router.get('/categories', (req, res) => {
+  const merchantId = getMerchantId(req);
+  const rows = db.prepare('SELECT DISTINCT category FROM catalog_items WHERE is_active = 1 AND merchant_id = ? ORDER BY category').all(merchantId) as { category: string }[];
   res.json({ categories: rows.map(r => r.category) });
 });
 
 router.get('/catalog-dashboard', (req, res) => {
+  const merchantId = getMerchantId(req);
   const category = req.query.category as string | undefined;
   const search = req.query.search as string | undefined;
   const activeOnly = req.query.active !== '0';
 
   let sql = 'SELECT * FROM catalog_items';
-  const conditions: string[] = [];
-  const params: any[] = [];
+  const conditions: string[] = ['merchant_id = ?'];
+  const params: any[] = [merchantId];
 
   if (activeOnly) {
     conditions.push('is_active = 1');
@@ -228,9 +250,7 @@ router.get('/catalog-dashboard', (req, res) => {
     params.push(`%${search}%`, `%${search}%`);
   }
 
-  if (conditions.length > 0) {
-    sql += ' WHERE ' + conditions.join(' AND ');
-  }
+  sql += ' WHERE ' + conditions.join(' AND ');
   sql += ' ORDER BY category, title';
 
   const items = db.prepare(sql).all(...params);
@@ -239,11 +259,12 @@ router.get('/catalog-dashboard', (req, res) => {
 
 // --- Onboarding endpoints ---
 
-router.get('/onboarding/status', (_req, res) => {
-  const config = getPolicyConfig('default');
-  const itemCount = (db.prepare('SELECT COUNT(*) as count FROM catalog_items').get() as { count: number }).count;
-  const shopifyCount = (db.prepare('SELECT COUNT(*) as count FROM catalog_items WHERE source_connection_id IS NOT NULL').get() as { count: number }).count;
-  const connections = getConnections();
+router.get('/onboarding/status', (req, res) => {
+  const merchantId = getMerchantId(req);
+  const config = getPolicyConfig(merchantId);
+  const itemCount = (db.prepare('SELECT COUNT(*) as count FROM catalog_items WHERE merchant_id = ?').get(merchantId) as { count: number }).count;
+  const shopifyCount = (db.prepare('SELECT COUNT(*) as count FROM catalog_items WHERE merchant_id = ? AND source_connection_id IS NOT NULL').get(merchantId) as { count: number }).count;
+  const connections = getConnections(merchantId);
   res.json({
     catalog_connected: itemCount > 0,
     catalog_item_count: itemCount,
@@ -253,37 +274,26 @@ router.get('/onboarding/status', (_req, res) => {
   });
 });
 
-router.post('/onboarding/import-catalog', (_req, res) => {
-  const existingCount = (db.prepare('SELECT COUNT(*) as count FROM catalog_items').get() as { count: number }).count;
+router.post('/onboarding/import-catalog', (req, res) => {
+  const merchantId = getMerchantId(req);
+  const existingCount = (db.prepare('SELECT COUNT(*) as count FROM catalog_items WHERE merchant_id = ?').get(merchantId) as { count: number }).count;
   if (existingCount > 0) {
     res.json({ success: true, message: 'Catalog already connected', items_imported: existingCount, was_already_connected: true });
     return;
   }
 
   const catalogItems = [
-    { id: 'item_001', title: 'Gentle Face Wash', description: 'Soothing gel cleanser for all skin types, 150ml', price_paise: 45000, category: 'skincare', stock: 80, pairs_with_ids: '["item_002","item_003"]' },
-    { id: 'item_002', title: 'Daily Moisturizer SPF 30', description: 'Lightweight hydrating moisturizer with sun protection, 100ml', price_paise: 65000, category: 'skincare', stock: 60, pairs_with_ids: '["item_001","item_004"]' },
-    { id: 'item_003', title: 'Vitamin C Serum', description: 'Brightening serum with 15% Vitamin C, 30ml', price_paise: 89000, category: 'skincare', stock: 45, pairs_with_ids: '["item_001","item_002"]' },
-    { id: 'item_004', title: 'Hydrating Toner', description: 'Alcohol-free toner with hyaluronic acid, 200ml', price_paise: 55000, category: 'skincare', stock: 70, pairs_with_ids: '["item_001","item_003"]' },
-    { id: 'item_005', title: 'Anti-Dandruff Shampoo', description: 'Zinc pyrithione shampoo for flake-free hair, 250ml', price_paise: 38000, category: 'haircare', stock: 90, pairs_with_ids: '["item_006","item_007"]' },
-    { id: 'item_006', title: 'Nourishing Conditioner', description: 'Deep conditioning treatment for dry hair, 200ml', price_paise: 42000, category: 'haircare', stock: 75, pairs_with_ids: '["item_005","item_007"]' },
-    { id: 'item_007', title: 'Hair Growth Oil', description: 'Ayurvedic blend with bhringraj and amla, 100ml', price_paise: 35000, category: 'haircare', stock: 100, pairs_with_ids: '["item_005","item_006"]' },
-    { id: 'item_008', title: 'Body Lotion Cocoa Butter', description: 'Rich body lotion for deep hydration, 300ml', price_paise: 48000, category: 'bodycare', stock: 65, pairs_with_ids: '["item_009","item_010"]' },
-    { id: 'item_009', title: 'Exfoliating Body Scrub', description: 'Coffee-walnut scrub for smooth skin, 200g', price_paise: 52000, category: 'bodycare', stock: 55, pairs_with_ids: '["item_008","item_010"]' },
-    { id: 'item_010', title: 'Natural Deodorant Stick', description: 'Aluminum-free deodorant, lavender scent, 50g', price_paise: 32000, category: 'bodycare', stock: 120, pairs_with_ids: '["item_008","item_009"]' },
-    { id: 'item_011', title: 'Ashwagandha Capsules', description: 'Stress relief supplement, 60 capsules', price_paise: 59000, category: 'wellness', stock: 40, pairs_with_ids: '["item_012","item_013"]' },
-    { id: 'item_012', title: 'Multivitamin Gummies', description: 'Daily essential vitamins, mixed fruit, 30 gummies', price_paise: 45000, category: 'wellness', stock: 85, pairs_with_ids: '["item_011","item_013"]' },
-    { id: 'item_013', title: 'Collagen Powder', description: 'Marine collagen for skin & joints, 200g unflavored', price_paise: 125000, category: 'wellness', stock: 30, pairs_with_ids: '["item_011","item_003"]' },
-    { id: 'item_014', title: 'Jade Face Roller', description: 'Natural jade stone roller for facial massage', price_paise: 75000, category: 'accessories', stock: 50, pairs_with_ids: '["item_003","item_004"]' },
-    { id: 'item_015', title: 'Bamboo Makeup Brush Set', description: 'Eco-friendly 8-piece brush set with pouch', price_paise: 95000, category: 'accessories', stock: 35, pairs_with_ids: '["item_014"]' },
+    { id: `${merchantId}_item_001`, title: 'Gentle Face Wash', description: 'Soothing gel cleanser for all skin types, 150ml', price_paise: 45000, category: 'skincare', stock: 80, pairs_with_ids: '[]' },
+    { id: `${merchantId}_item_002`, title: 'Daily Moisturizer SPF 30', description: 'Lightweight hydrating moisturizer with sun protection, 100ml', price_paise: 65000, category: 'skincare', stock: 60, pairs_with_ids: '[]' },
+    { id: `${merchantId}_item_003`, title: 'Vitamin C Serum', description: 'Brightening serum with 15% Vitamin C, 30ml', price_paise: 89000, category: 'skincare', stock: 45, pairs_with_ids: '[]' },
   ];
 
   const insert = db.prepare(
-    'INSERT OR IGNORE INTO catalog_items (id, title, description, price_paise, category, stock, pairs_with_ids) VALUES (?, ?, ?, ?, ?, ?, ?)'
+    'INSERT OR IGNORE INTO catalog_items (id, merchant_id, title, description, price_paise, category, stock, pairs_with_ids) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
   );
   const insertMany = db.transaction(() => {
     for (const item of catalogItems) {
-      insert.run(item.id, item.title, item.description, item.price_paise, item.category, item.stock, item.pairs_with_ids);
+      insert.run(item.id, merchantId, item.title, item.description, item.price_paise, item.category, item.stock, item.pairs_with_ids);
     }
   });
   insertMany();
@@ -292,16 +302,18 @@ router.post('/onboarding/import-catalog', (_req, res) => {
 });
 
 router.patch('/onboarding/toggle', (req, res) => {
+  const merchantId = getMerchantId(req);
   const { agent_commerce_enabled } = req.body;
   if (typeof agent_commerce_enabled !== 'boolean') {
     res.status(400).json({ error: 'agent_commerce_enabled must be a boolean' });
     return;
   }
-  const updated = updatePolicyConfig('default', { agent_commerce_enabled });
+  const updated = updatePolicyConfig(merchantId, { agent_commerce_enabled });
   res.json({ agent_commerce_enabled: updated.agent_commerce_enabled });
 });
 
 router.post('/onboarding/connect-shopify', async (req, res) => {
+  const merchantId = getMerchantId(req);
   try {
     const { shop_domain, admin_api_access_token, client_id, client_secret } = req.body;
 
@@ -327,6 +339,7 @@ router.post('/onboarding/connect-shopify', async (req, res) => {
       clientId: hasClientCreds ? client_id : undefined,
       clientSecret: hasClientCreds ? client_secret : undefined,
       accessToken: hasDirectToken ? admin_api_access_token : undefined,
+      merchantId,
     });
     res.json({
       success: true,
@@ -339,8 +352,9 @@ router.post('/onboarding/connect-shopify', async (req, res) => {
   }
 });
 
-router.get('/onboarding/connections', (_req, res) => {
-  const connections = getConnections();
+router.get('/onboarding/connections', (req, res) => {
+  const merchantId = getMerchantId(req);
+  const connections = getConnections(merchantId);
   res.json({ connections });
 });
 
@@ -357,9 +371,11 @@ router.post('/onboarding/sync-shopify/:connectionId', async (req, res) => {
 // --- Agent trigger endpoints ---
 
 router.post('/agents/growth/cart-recovery', async (req, res) => {
+  const merchantId = getMerchantId(req);
   try {
     const scenario: GrowthAgentScenario = {
       type: 'cart_recovery',
+      merchantId,
       context: req.body.context || {
         customer_id: 'cust_demo_001',
         customer_name: 'Priya Sharma',
@@ -383,9 +399,11 @@ router.post('/agents/growth/cart-recovery', async (req, res) => {
 });
 
 router.post('/agents/growth/upsell', async (req, res) => {
+  const merchantId = getMerchantId(req);
   try {
     const scenario: GrowthAgentScenario = {
       type: 'upsell',
+      merchantId,
       context: req.body.context || {
         customer_id: 'cust_demo_002',
         customer_name: 'Rahul Verma',
@@ -410,6 +428,7 @@ router.post('/agents/growth/upsell', async (req, res) => {
 });
 
 router.post('/agents/buyer/shop', async (req, res) => {
+  const merchantId = getMerchantId(req);
   try {
     const { request } = req.body;
     if (!request || typeof request !== 'string') {
@@ -417,7 +436,7 @@ router.post('/agents/buyer/shop', async (req, res) => {
       return;
     }
 
-    const result = await runBuyerAgent(request);
+    const result = await runBuyerAgent(request, merchantId);
     res.json({ success: true, ...result });
   } catch (err) {
     const error = err as Error;

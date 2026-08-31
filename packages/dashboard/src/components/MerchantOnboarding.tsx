@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useMerchant } from '../MerchantContext';
 
 interface ShopifyConnection {
   id: string;
@@ -29,6 +30,7 @@ function timeAgo(dateStr: string | null): string {
 }
 
 export default function MerchantOnboarding() {
+  const { apiUrl, merchantId } = useMerchant();
   const [status, setStatus] = useState<OnboardingStatus | null>(null);
   const [source, setSource] = useState('shopify_real');
   const [importing, setImporting] = useState(false);
@@ -41,18 +43,18 @@ export default function MerchantOnboarding() {
   const [shopError, setShopError] = useState<string | null>(null);
 
   const fetchStatus = async () => {
-    const res = await fetch('/api/onboarding/status');
+    const res = await fetch(apiUrl('/api/onboarding/status'));
     const data = await res.json();
     setStatus(data);
   };
 
-  useEffect(() => { fetchStatus(); }, []);
+  useEffect(() => { fetchStatus(); }, [merchantId]);
 
   const handleSimulatedImport = async () => {
     setImporting(true);
     setImportResult(null);
     try {
-      const res = await fetch('/api/onboarding/import-catalog', { method: 'POST' });
+      const res = await fetch(apiUrl('/api/onboarding/import-catalog'), { method: 'POST' });
       const data = await res.json();
       if (data.was_already_connected) {
         setImportResult(`Demo catalog already loaded (${data.items_imported} items)`);
@@ -82,7 +84,7 @@ export default function MerchantOnboarding() {
         return;
       }
 
-      const res = await fetch('/api/onboarding/connect-shopify', {
+      const res = await fetch(apiUrl('/api/onboarding/connect-shopify'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ shop_domain: shopDomain, client_id: clientId, client_secret: clientSecret }),
@@ -107,7 +109,7 @@ export default function MerchantOnboarding() {
     setSyncing(connectionId);
     setImportResult(null);
     try {
-      const res = await fetch(`/api/onboarding/sync-shopify/${connectionId}`, { method: 'POST' });
+      const res = await fetch(apiUrl(`/api/onboarding/sync-shopify/${connectionId}`), { method: 'POST' });
       const data = await res.json();
       if (data.success) {
         setImportResult(`Synced: +${data.added} new, ${data.updated} updated, -${data.deactivated} removed | ${data.totalActive} active`);
@@ -125,7 +127,7 @@ export default function MerchantOnboarding() {
     if (!status) return;
     setToggling(true);
     try {
-      const res = await fetch('/api/onboarding/toggle', {
+      const res = await fetch(apiUrl('/api/onboarding/toggle'), {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ agent_commerce_enabled: !status.agent_commerce_enabled }),
