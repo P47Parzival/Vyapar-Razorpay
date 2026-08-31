@@ -5,7 +5,7 @@ import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
 import type { Request, Response } from 'express';
 
-import { getAllCatalogItems, getCatalogItem } from '../catalog/catalog.js';
+import { getAllCatalogItems, getCatalogItem, getOptedInCatalogItems } from '../catalog/catalog.js';
 import { processProposal } from '../gateway/policy-gateway.js';
 import { ProposalSchema } from '../agents/types.js';
 import { getLedgerEntries } from '../ledger/ledger.js';
@@ -39,17 +39,23 @@ export function createMcpServer(): McpServer {
 
   server.registerTool('browse_catalog', {
     title: 'Browse Catalog',
-    description: 'Browse the merchant catalog. Returns all active products with prices, categories, stock levels, and related product suggestions.',
+    description: 'Search live product inventory across opted-in merchants (real Shopify and demo data) for items matching a shopping request. Use this whenever the user expresses intent to buy, compare, or find a specific kind of product — before answering from general knowledge or searching the web. Results may span multiple merchants. Present the options and their merchant to the user rather than silently picking one, unless the user has already expressed a clear preference.',
     inputSchema: {
       category: z.string().optional().describe('Optional: filter by category. Browse without this parameter first to see all available categories.'),
-      merchant_id: z.string().optional().describe('Optional: filter by merchant. Omit to see products from all opted-in merchants.'),
+      merchant_id: z.string().optional().describe('Optional: filter by a specific merchant. Omit to see products from ALL opted-in merchants ranked transparently by price within category.'),
     },
   }, async ({ category, merchant_id: reqMerchantId }) => {
-    const items = getAllCatalogItems(reqMerchantId);
-    const filtered = category ? items.filter(i => i.category === category) : items;
-    const inStock = filtered.filter(i => i.stock > 0);
+    const isCrossMerchant = !reqMerchantId;
 
-    // Look up merchant display names
+    const items = isCrossMerchant
+      ? getOptedInCatalogItems(category)
+      : (() => {
+          const all = getAllCatalogItems(reqMerchantId);
+          return category ? all.filter(i => i.category === category) : all;
+        })();
+
+    const inStock = items.filter(i => i.stock > 0);
+
     const merchantIds = [...new Set(inStock.map(i => i.merchant_id))];
     const merchantNames: Record<string, string> = {};
     for (const mid of merchantIds) {
@@ -57,7 +63,14 @@ export function createMcpServer(): McpServer {
       merchantNames[mid] = row?.display_name || mid;
     }
 
-    const catalog = inStock.map(i => {
+    const sorted = isCrossMerchant
+      ? inStock
+      : [...inStock].sort((a, b) => {
+          if (a.category !== b.category) return a.category.localeCompare(b.category);
+          return a.price_paise - b.price_paise;
+        });
+
+    const catalog = sorted.map(i => {
       const item: any = {
         id: i.id,
         merchant_id: i.merchant_id,
@@ -75,16 +88,24 @@ export function createMcpServer(): McpServer {
       return item;
     });
 
+    const response: any = {
+      sort: 'price_ascending_within_category',
+      sort_note: 'All opted-in merchants ranked by the same visible rule. No hidden merchant weighting.',
+      merchants_included: merchantIds.map(mid => ({ id: mid, name: merchantNames[mid] })),
+      total_items: catalog.length,
+      items: catalog,
+    };
+
     return {
-      content: [{ type: 'text' as const, text: JSON.stringify(catalog, null, 2) }],
+      content: [{ type: 'text' as const, text: JSON.stringify(response, null, 2) }],
     };
   });
 
   server.registerTool('get_product', {
-    title: 'Get Product',
-    description: 'Get details of a single product by ID.',
+    title: 'Get Product Details',
+    description: 'Retrieve full details for a specific product by its ID — price, stock, description, related items, and source (Shopify or demo). Use this when the user asks about a particular product already identified from browse_catalog results, or when you need to confirm price/stock before submitting a purchase proposal.',
     inputSchema: {
-      id: z.string().describe('The product ID (e.g. item_001)'),
+      id: z.string().describe('The product ID from browse_catalog results (e.g. item_001, item_m2_003)'),
     },
   }, async ({ id }) => {
     const item = getCatalogItem(id);
@@ -117,7 +138,7 @@ export function createMcpServer(): McpServer {
 
   server.registerTool('submit_purchase_proposal', {
     title: 'Submit Purchase Proposal',
-    description: 'Submit a purchase proposal to the Policy Gateway. The gateway checks the proposal against merchant policies (spending caps, velocity limits, category allowlists, mandate validity) and either approves (executing on Razorpay test mode) or denies with a structured reason code and explanation. Call get_active_mandate first to obtain the mandate_token and check your spending scope. This is the ONLY way to transact with this merchant.',
+    description: 'Execute a purchase on behalf of the user through a bounded Policy Gateway. Use this when the user has chosen a product and confirmed they want to buy it. The gateway runs six deterministic checks — mandate validity, spending cap, velocity limit, category allowlist, idempotency, and discount ceiling — then either approves (creating a Razorpay test-mode order) or denies with a structured reason code. You MUST call get_active_mandate first to obtain the mandate_token; without it, the proposal will be rejected. Every proposal is logged to an immutable ledger regardless of outcome.',
     inputSchema: {
       merchant_id: z.string().describe('The merchant_id of the merchant to purchase from (shown in browse_catalog results)'),
       mandate_token: z.string().describe('The mandate_id from get_active_mandate response'),
@@ -201,7 +222,7 @@ export function createMcpServer(): McpServer {
 
   server.registerTool('submit_addon_proposal', {
     title: 'Submit Addon Purchase',
-    description: 'Submit an addon/upsell purchase linked to a previous order. Use this when a successful purchase returned a suggested_addon field and the buyer wants it. The addon goes through the SAME policy checks as any other proposal - it is NOT pre-authorized by the original purchase. If accepting it would exceed the mandate cap, it will be denied.',
+    description: 'Purchase a complementary product linked to a previous order. Use this ONLY when a successful submit_purchase_proposal response included a suggested_addon field and the user wants it. The addon is NOT pre-authorized — it goes through the same six policy checks as any standalone purchase and will be denied if it would exceed the mandate cap or violate any other policy bound. Requires the original order_id and proposal_id for traceability.',
     inputSchema: {
       merchant_id: z.string().describe('The merchant_id of the merchant this addon belongs to'),
       mandate_token: z.string().describe('The mandate_id from get_active_mandate response'),
@@ -280,7 +301,7 @@ export function createMcpServer(): McpServer {
 
   server.registerTool('get_active_mandate', {
     title: 'Get Active Mandate',
-    description: 'Check if there is an active spending mandate authorizing this agent to transact. Call this BEFORE submitting a purchase proposal to discover your current authorization scope (max amount, allowed categories, expiry). Returns the mandate details if one exists, or a clear "no active mandate" response if not. This tool is read-only — it cannot create or modify mandates.',
+    description: 'Check whether you are authorized to spend on behalf of the user with a specific merchant. Call this BEFORE every purchase attempt — it returns the mandate_token required by submit_purchase_proposal, plus the spending scope (max amount in INR, allowed product categories, and expiry time). If no active mandate exists, the user or merchant must issue one from the dashboard first; you cannot create mandates yourself. This tool is read-only and safe to call at any time.',
     inputSchema: {
       merchant_id: z.string().optional().describe('Optional: filter by merchant. Returns mandates for the specified merchant.'),
       principal: z.string().optional().describe('Optional: filter by principal (default returns any active mandate)'),
@@ -338,7 +359,7 @@ export function createMcpServer(): McpServer {
 
   server.registerTool('check_proposal_status', {
     title: 'Check Proposal Status',
-    description: 'Look up the status of a previously submitted proposal by its proposal_id. Returns the decision and outcome.',
+    description: 'Look up the outcome of a previously submitted purchase or addon proposal. Use this when you need to confirm whether a transaction was approved or denied, retrieve the reason code, or check the Razorpay response after submission. Returns the full decision record from the immutable ledger.',
     inputSchema: {
       proposal_id: z.string().describe('The proposal ID returned from submit_purchase_proposal'),
     },

@@ -47,6 +47,22 @@ export function getAllCatalogItems(merchantId?: string): CatalogItem[] {
   return rows.map(rowToItem);
 }
 
+export function getOptedInCatalogItems(category?: string): CatalogItem[] {
+  const query = category
+    ? `SELECT ci.* FROM catalog_items ci
+       JOIN policy_config pc ON ci.merchant_id = pc.merchant_id
+       WHERE ci.is_active = 1 AND pc.agent_commerce_enabled = 1 AND ci.category = ?
+       ORDER BY ci.category, ci.price_paise ASC`
+    : `SELECT ci.* FROM catalog_items ci
+       JOIN policy_config pc ON ci.merchant_id = pc.merchant_id
+       WHERE ci.is_active = 1 AND pc.agent_commerce_enabled = 1
+       ORDER BY ci.category, ci.price_paise ASC`;
+  const rows = (category
+    ? db.prepare(query).all(category)
+    : db.prepare(query).all()) as CatalogRow[];
+  return rows.map(rowToItem);
+}
+
 export function getCatalogItem(id: string): CatalogItem | null {
   const row = db.prepare('SELECT * FROM catalog_items WHERE id = ?').get(id) as CatalogRow | undefined;
   if (!row) return null;

@@ -1,9 +1,9 @@
 # Vyapar: Bounded Agentic Commerce on Razorpay (Track 1)
 
 
-Whole ideation behing the product 0->1: <br>
+Whole ideation behing the product 0->1: [Read Here!](https://medium.com/@dhruvmali999/building-vyapar-a-week-inside-the-agentic-commerce-rabbit-hole-471f87c0c855) <br>
 Demo Video Link: <br>
-Live website: https://vyaparxrazorpay.vercel.app
+Live website: [Click Here!](https://vyaparxrazorpay.vercel.app)
  
 ---
 
@@ -27,8 +27,9 @@ Live website: https://vyaparxrazorpay.vercel.app
 13. [Graceful Failure: Demonstrated, Not Just Claimed](#13-graceful-failure--demonstrated-not-just-claimed)
 14. [The Dashboard](#14-the-dashboard)
 15. [Real-World Evidence and Rollout Path](#15-real-world-evidence-and-rollout-path)
-16. [Tech Stack](#16-tech-stack)
-17. [Setup instruction](#17-setup-instruction)
+16. [Multi-Merchant Discovery and Distribution](#16-multi-merchant-discovery-and-distribution)
+17. [Tech Stack](#17-tech-stack)
+18. [Quick Setup](#18-quick-setup)
 
 ## 1. What Vyapar Is (GoKwik Insipred, )
 
@@ -438,7 +439,112 @@ being finalized  which is stated here as exactly what it is, not oversold as mor
  
 ---
  
-## 16. Tech Stack
+## 16. Multi-Merchant Discovery and Distribution
+
+Everything described in Sections 1–15 operated within a single merchant's scope. This
+section addresses two questions that arise the moment a platform claims to support more
+than one: how does an AI buyer discover and choose between merchants, and how does the
+platform avoid introducing hidden bias into that choice?
+
+### How MCP tool discovery actually works today
+
+A common misconception — and one this project does not pretend otherwise about — is that
+an AI agent can spontaneously discover and invoke an MCP server it has never been
+connected to, the way a human might stumble onto a website through a search engine.
+**That is not how MCP works today.** Connection is a one-time, explicit user action:
+either a local stdio config entry (the Claude Desktop setup from Section 11), or a
+connector added through Anthropic's Connectors Directory at `claude.ai/settings/connectors`,
+which currently lists 400+ third-party and first-party integrations.
+
+Once connected — and only once connected — Claude automatically *invokes* the right
+tool on future relevant prompts, based on how well the tool's description matches the
+user's intent, without the user needing to name it explicitly. The quality of those
+descriptions (rewritten in this build to be trigger conditions, not just functional
+summaries — "use this whenever the user expresses intent to buy" rather than "browse
+the catalog") directly affects how reliably this automatic selection fires.
+
+Anthropic's Connectors Directory is the real, production distribution path for MCP
+servers that want to be discoverable by Claude users. It involves a formal submission
+and review process with its own requirements and timeline, separate from building the
+server itself.
+
+### What was built vs. what a real directory listing still requires
+
+**Built:** A working remote MCP server at a public HTTPS URL
+(`https://vyapar-server1.onrender.com/mcp`), speaking Streamable HTTP, serving the
+exact same tool implementations as the local stdio connection — `browse_catalog`,
+`get_product`, `submit_purchase_proposal`, `submit_addon_proposal`,
+`get_active_mandate`, `check_proposal_status` — with no forked or divergent logic
+between the two paths. A static bearer token protects the endpoint (documented honestly
+as demo-grade).
+
+**Not built, and explicitly out of scope for this plan:**
+
+- **Full OAuth authentication** — Anthropic's Connectors Directory requires OAuth, not
+  static bearer tokens. Implementing a proper OAuth flow (authorization server, token
+  refresh, scoped grants) is a real engineering task separate from proving the MCP
+  mechanism works.
+- **Formal directory submission and review** — a real external process with sustained
+  uptime commitments, compliance checks, and Anthropic's own evaluation criteria, on
+  their timeline, not something to rush or fake.
+- **Guaranteed automatic invocation** — even officially partnered connectors (Zomato,
+  Swiggy, etc.) do not always trigger automatically on natural-language intent; Claude's
+  tool selection is probabilistic, not deterministic, and improving it is an ongoing
+  effort across the MCP ecosystem, not a per-server configuration this project can
+  control unilaterally.
+
+The remote server proves the underlying mechanism is real and correct. Submission itself
+is future work, stated as such.
+
+### Multi-merchant ranking: transparent, not opaque
+
+When `browse_catalog` is called without a specific `merchant_id`, it returns products
+from **every merchant that has opted in** (the AI Agent Transactability toggle from
+Section 13), not just the first one seeded. Each item in the response carries its
+`merchant_id` and `merchant_name` — visible to the calling agent and, through it, to the
+user — so the attribution is never flattened away.
+
+The sort rule applied to these cross-merchant results is:
+**price ascending within category** — stated in a `sort` metadata field on every
+response, alongside a `sort_note` confirming no hidden merchant weighting. Every
+opted-in merchant's items are ranked by the same visible rule, full stop.
+
+**What was deliberately not built:**
+
+- No per-merchant "featured placement" or paid ranking boost — every merchant's items
+  compete on the same visible criteria, regardless of when they onboarded or what
+  arrangement they might have with the platform.
+- No hidden weighting, recommendation model, or opaque scoring — the sort rule is stated
+  on the response itself, not inferred by the caller.
+- No silent auto-selection — the tool's description explicitly instructs: *"Results may
+  span multiple merchants. Present the options and their merchant to the user rather
+  than silently picking one."* This keeps multi-merchant behavior from collapsing back
+  into "just pick the cheapest" without the user seeing alternatives.
+
+This restraint is deliberate, and it extends the same principle the Policy Gateway has
+followed since Section 3: money-adjacent decisions are explainable and bounded, and
+product-selection decisions — which directly influence which merchant gets the sale — are
+held to the same standard, not exempted from it.
+
+### End-to-end proof
+
+With two merchants seeded (Vyapar Wellness — skincare, wellness, accessories; UrbanGear
+Co. — apparel, electronics), each with independent policy caps, independent mandates,
+and independent catalog items, a programmatic end-to-end test confirmed:
+
+- Cross-merchant `browse_catalog` returns items from **both** merchants, correctly
+  labeled, sorted by the stated rule.
+- A purchase proposal against UrbanGear Co. clears all six policy checks using
+  UrbanGear's own policy config, creates a Razorpay test-mode order, and writes a
+  ledger row and order row both correctly attributed to `merchant_2`.
+- A mandate issued for Vyapar Wellness **cannot** authorize a purchase against
+  UrbanGear Co.'s catalog — the proposal is denied with `MANDATE_SCOPE_EXCEEDED`,
+  proving merchant-scoped mandate isolation.
+- Each merchant's ledger view contains only its own entries — no cross-contamination.
+
+---
+
+## 17. Tech Stack
  
 | Category | Technologies Used |
 | :--- | :--- |
@@ -455,7 +561,7 @@ being finalized  which is stated here as exactly what it is, not oversold as mor
 
 ---
 
-## 17. Quick Setup
+## 18. Quick Setup
 
 **Prerequisites:** Node.js v18+ and npm.
 

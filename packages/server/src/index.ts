@@ -33,14 +33,28 @@ app.use('/api', apiRouter);
 app.use('/api', webhookRouter);
 
 // MCP Server — exposes Vyapar as a tool provider for external AI agents
-app.post('/mcp', handleMcpPost);
-app.get('/mcp', handleMcpGet);
-app.delete('/mcp', handleMcpDelete);
+// Bearer token auth (demo-grade; a real Connectors Directory listing would require full OAuth)
+const MCP_TOKEN = process.env.MCP_BEARER_TOKEN;
+
+function mcpAuth(req: express.Request, res: express.Response, next: express.NextFunction) {
+  if (!MCP_TOKEN) return next();
+  const auth = req.headers.authorization;
+  if (!auth || auth !== `Bearer ${MCP_TOKEN}`) {
+    res.status(401).json({ error: 'Unauthorized — provide a valid Bearer token in the Authorization header' });
+    return;
+  }
+  next();
+}
+
+app.post('/mcp', mcpAuth, handleMcpPost);
+app.get('/mcp', mcpAuth, handleMcpGet);
+app.delete('/mcp', mcpAuth, handleMcpDelete);
 
 // .well-known agent-commerce discovery manifest
 app.get('/.well-known/agent-commerce.json', (_req, res) => {
   const host = _req.headers.host || `localhost:${PORT}`;
-  const baseUrl = `http://${host}`;
+  const proto = _req.headers['x-forwarded-proto'] === 'https' ? 'https' : 'http';
+  const baseUrl = `${proto}://${host}`;
   res.json({
     mode: 'test',
     protocol_note: 'This manifest follows emerging agent-commerce discovery conventions (UCP/.well-known pattern). Not a certified UCP implementation.',
@@ -51,6 +65,10 @@ app.get('/.well-known/agent-commerce.json', (_req, res) => {
     catalog_source_note: 'Product data is live from a connected Shopify store. Payment settlement uses Razorpay test-mode credentials - no real funds are transferred.',
     catalog_feed: `${baseUrl}/api/catalog`,
     mcp_endpoint: `${baseUrl}/mcp`,
+    mcp_auth: {
+      type: 'bearer',
+      note: 'Demo-grade static bearer token. A real Connectors Directory submission would require full OAuth per Anthropic requirements.',
+    },
     capabilities: ['browse_catalog', 'get_product', 'submit_purchase_proposal', 'submit_addon_proposal', 'get_active_mandate', 'check_proposal_status'],
     mandate_required: true,
     currency: 'INR',
