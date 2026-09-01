@@ -38,12 +38,14 @@ function getClient(): BedrockRuntimeClient {
     if (awsEnvVars.length > 0) {
       console.log(`[Bedrock] WARNING: Found AWS env vars that may interfere: ${awsEnvVars.join(', ')}`);
     }
+    // Use a provider function to completely bypass the default credential chain
+    const credentialProvider = async () => ({
+      accessKeyId: creds.accessKeyId,
+      secretAccessKey: creds.secretAccessKey,
+    });
     _client = new BedrockRuntimeClient({
       region,
-      credentials: {
-        accessKeyId: creds.accessKeyId,
-        secretAccessKey: creds.secretAccessKey,
-      },
+      credentials: credentialProvider,
     });
   }
   return _client;
