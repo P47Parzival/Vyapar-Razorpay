@@ -13,11 +13,10 @@ let _client: BedrockRuntimeClient | null = null;
 function getClient(): BedrockRuntimeClient {
   if (!_client) {
     const region = process.env.AWS_REGION || 'ap-south-1';
-    const rawToken = process.env.BEDROCK_API_KEY || '';
-    _client = new BedrockRuntimeClient({
-      region,
-      token: { token: rawToken },
-    });
+    if (process.env.BEDROCK_API_KEY && !process.env.AWS_BEARER_TOKEN_BEDROCK) {
+      process.env.AWS_BEARER_TOKEN_BEDROCK = process.env.BEDROCK_API_KEY;
+    }
+    _client = new BedrockRuntimeClient({ region });
   }
   return _client;
 }
