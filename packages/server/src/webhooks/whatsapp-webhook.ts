@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import { randomUUID } from 'node:crypto';
 import twilio from 'twilio';
 import db from '../db/client.js';
-import { sendWhatsAppMessage, AUTH_TOKEN } from '../whatsapp/twilio-client.js';
+import { sendWhatsAppMessage } from '../whatsapp/twilio-client.js';
 import { parseWhatsAppPolicyMessage } from '../whatsapp/whatsapp-policy-parser.js';
 import {
   evaluatePolicyChangeRequest,
@@ -50,14 +50,17 @@ router.post('/webhooks/whatsapp', async (req: Request, res: Response) => {
   // Twilio computes the signature from the exact webhook URL configured in the console.
   // Behind a reverse proxy (Render, ngrok), req.protocol/host may differ, so we use
   // an explicit env var that matches what Twilio has on file.
+  const authToken = process.env.TWILIO_AUTH_TOKEN || '';
   const signature = req.headers['x-twilio-signature'] as string | undefined;
   const webhookUrl = process.env.TWILIO_WEBHOOK_URL
     || `${req.headers['x-forwarded-proto'] || req.protocol}://${req.get('host')}${req.originalUrl}`;
 
-  if (signature) {
-    const valid = twilio.validateRequest(AUTH_TOKEN, signature, webhookUrl, req.body);
+  console.log(`[WhatsApp] Signature check — url: ${webhookUrl}, body keys: ${Object.keys(req.body || {}).join(',')}, sig present: ${!!signature}, token present: ${!!authToken}`);
+
+  if (signature && authToken) {
+    const valid = twilio.validateRequest(authToken, signature, webhookUrl, req.body);
     if (!valid) {
-      console.log(`[WhatsApp] Invalid Twilio signature — rejecting (url used: ${webhookUrl})`);
+      console.log(`[WhatsApp] Invalid Twilio signature — rejecting`);
       return;
     }
   }

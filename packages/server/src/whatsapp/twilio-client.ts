@@ -14,4 +14,3 @@ export async function sendWhatsAppMessage(to: string, body: string) {
   });
 }
 
-export { AUTH_TOKEN };
