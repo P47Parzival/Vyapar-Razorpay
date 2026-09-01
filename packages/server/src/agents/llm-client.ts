@@ -26,9 +26,14 @@ function parseBedrockApiKey(raw: string): { accessKeyId: string; secretAccessKey
 
 function getClient(): BedrockRuntimeClient {
   if (!_client) {
-    const creds = parseBedrockApiKey(process.env.BEDROCK_API_KEY || '');
+    const rawKey = process.env.BEDROCK_API_KEY || '';
+    console.log(`[Bedrock] Raw key length: ${rawKey.length}, starts with ABSK: ${rawKey.startsWith('ABSK')}`);
+    const creds = parseBedrockApiKey(rawKey);
+    console.log(`[Bedrock] Parsed accessKeyId: ${creds.accessKeyId}, secretKey length: ${creds.secretAccessKey.length}`);
+    const region = process.env.AWS_REGION || 'ap-south-1';
+    console.log(`[Bedrock] Region: ${region}, Model: ${getModelId()}`);
     _client = new BedrockRuntimeClient({
-      region: process.env.AWS_REGION || 'ap-south-1',
+      region,
       credentials: creds,
     });
   }
