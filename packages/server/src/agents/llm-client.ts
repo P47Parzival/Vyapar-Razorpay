@@ -10,14 +10,26 @@ import {
 
 let _client: BedrockRuntimeClient | null = null;
 
+function parseBedrockApiKey(raw: string): { accessKeyId: string; secretAccessKey: string } {
+  if (raw.startsWith('ABSK')) {
+    const decoded = Buffer.from(raw.slice(4), 'base64').toString('utf-8');
+    const colonIdx = decoded.indexOf(':');
+    if (colonIdx > 0) {
+      return {
+        accessKeyId: decoded.slice(0, colonIdx),
+        secretAccessKey: decoded.slice(colonIdx + 1),
+      };
+    }
+  }
+  return { accessKeyId: raw, secretAccessKey: raw };
+}
+
 function getClient(): BedrockRuntimeClient {
   if (!_client) {
+    const creds = parseBedrockApiKey(process.env.BEDROCK_API_KEY || '');
     _client = new BedrockRuntimeClient({
       region: process.env.AWS_REGION || 'ap-south-1',
-      credentials: {
-        accessKeyId: process.env.BEDROCK_API_KEY || '',
-        secretAccessKey: process.env.BEDROCK_API_KEY || '',
-      },
+      credentials: creds,
     });
   }
   return _client;
