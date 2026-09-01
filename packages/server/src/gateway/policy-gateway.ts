@@ -16,6 +16,14 @@ import { executeOnRazorpay } from '../razorpay/execution.js';
 import { writeLedgerEntry } from '../ledger/ledger.js';
 import type { LedgerRow } from '../ledger/ledger.js';
 import db from '../db/client.js';
+import { checkAndNotifyNotableDenial } from '../whatsapp/notable-denial-notifier.js';
+
+export interface ProcessOptions {
+  singleUseOverride?: {
+    originalProposalId: string;
+    skipChecks: string[];
+  };
+}
 
 interface GatewayResult {
   decision: Decision;
@@ -40,7 +48,7 @@ function getReasonCode(check: PolicyCheckResult): string {
   return REASON_CODES[check.check_name] || 'POLICY_CHECK_FAILED';
 }
 
-export async function processProposal(proposal: Proposal): Promise<GatewayResult> {
+export async function processProposal(proposal: Proposal, options?: ProcessOptions): Promise<GatewayResult> {
   const policy = getPolicyConfig(proposal.merchant_id);
 
   // Pre-check: is agent commerce enabled for this merchant?
@@ -66,21 +74,26 @@ export async function processProposal(proposal: Proposal): Promise<GatewayResult
   }
 
   const checks: PolicyCheckResult[] = [];
+  const skipChecks = options?.singleUseOverride?.skipChecks || [];
 
   // Run checks in order, stop at first failure
-  const checkFns = [
-    () => checkMandate(proposal),
-    () => checkPerTransactionCap(proposal, policy),
-    () => checkVelocityCap(proposal, policy),
-    () => checkAllowlist(proposal, policy),
-    () => checkDiscountCeiling(proposal, policy),
-    () => checkIdempotency(proposal),
+  const checkFns: { name: string; run: () => PolicyCheckResult }[] = [
+    { name: 'mandate', run: () => checkMandate(proposal) },
+    { name: 'per_transaction_cap', run: () => checkPerTransactionCap(proposal, policy) },
+    { name: 'velocity_cap', run: () => checkVelocityCap(proposal, policy) },
+    { name: 'allowlist', run: () => checkAllowlist(proposal, policy) },
+    { name: 'discount_ceiling', run: () => checkDiscountCeiling(proposal, policy) },
+    { name: 'idempotency', run: () => checkIdempotency(proposal) },
   ];
 
   let failedCheck: PolicyCheckResult | null = null;
 
-  for (const runCheck of checkFns) {
-    const result = runCheck();
+  for (const check of checkFns) {
+    if (skipChecks.includes(check.name)) {
+      checks.push({ check_name: check.name, passed: true, detail: `Skipped — single-use merchant override for proposal ${options!.singleUseOverride!.originalProposalId}` });
+      continue;
+    }
+    const result = check.run();
     checks.push(result);
     if (!result.passed) {
       failedCheck = result;
@@ -110,6 +123,12 @@ export async function processProposal(proposal: Proposal): Promise<GatewayResult
     };
 
     const ledgerRow = writeLedgerEntry(proposal, checks, decision, outcome);
+
+    // Notify merchant via WhatsApp for notable denials (amount > 2x cap)
+    if (!options?.singleUseOverride) {
+      try { checkAndNotifyNotableDenial(proposal, decision); } catch { /* best-effort */ }
+    }
+
     return { decision, outcome, ledgerRow };
   }
 
@@ -165,6 +184,7 @@ function getSourceFromProposal(proposal: Proposal): string {
   const tb = (proposal as any).triggered_by;
   if (tb === 'webhook') return 'webhook';
   if (tb === 'mcp_external') return 'external_mcp_client';
+  if (tb === 'whatsapp_override') return 'whatsapp_merchant_override';
   if (tb === 'internal') return 'internal_buyer_agent';
   if (proposal.agent_type === 'growth') return 'internal_growth_agent';
   return 'internal_buyer_agent';

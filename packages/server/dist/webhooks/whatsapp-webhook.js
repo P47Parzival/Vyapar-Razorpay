@@ -1,41 +1,52 @@
 import { Router } from 'express';
+import { randomUUID } from 'node:crypto';
 import twilio from 'twilio';
+import db from '../db/client.js';
+import { sendWhatsAppMessage, AUTH_TOKEN } from '../whatsapp/twilio-client.js';
 import { parseWhatsAppPolicyMessage } from '../whatsapp/whatsapp-policy-parser.js';
 import { evaluatePolicyChangeRequest, applyPolicyFieldChange, } from '../whatsapp/policy-change-evaluator.js';
 import { getPolicyConfig } from '../gateway/policy-config.js';
+import { executeOverride } from '../whatsapp/override-flow.js';
 const router = Router();
-const ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID || '';
-const AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN || '';
-const WHATSAPP_FROM = process.env.TWILIO_WHATSAPP_FROM || '';
 const MERCHANT_NUMBER = process.env.MERCHANT_WHATSAPP_NUMBER || '';
 const MERCHANT_ID = process.env.WHATSAPP_MERCHANT_ID || 'default';
-const twilioClient = twilio(ACCOUNT_SID, AUTH_TOKEN);
-async function sendWhatsAppReply(to, body) {
-    await twilioClient.messages.create({
-        from: WHATSAPP_FROM,
-        to,
-        body,
-    });
+const insertAuditLog = db.prepare(`
+  INSERT INTO whatsapp_audit_log
+    (id, merchant_id, from_number, message_text, parsed_change_json, decision, field_changed, value_before, value_after, reply_sent, created_at)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+`);
+function writeAuditRow(opts) {
+    const id = `wa_${randomUUID().slice(0, 12)}`;
+    insertAuditLog.run(id, opts.merchantId, opts.from, opts.message, opts.parsedJson, opts.decision, opts.field, opts.before, opts.after, opts.reply);
+    return id;
 }
 router.post('/webhooks/whatsapp', async (req, res) => {
-    // Respond to Twilio immediately — processing happens async
     res.status(200).type('text/xml').send('<Response></Response>');
     // 1. Twilio signature validation
+    // Twilio computes the signature from the exact webhook URL configured in the console.
+    // Behind a reverse proxy (Render, ngrok), req.protocol/host may differ, so we use
+    // an explicit env var that matches what Twilio has on file.
     const signature = req.headers['x-twilio-signature'];
-    const url = `${req.protocol}://${req.get('host')}${req.originalUrl}`;
+    const webhookUrl = process.env.TWILIO_WEBHOOK_URL
+        || `${req.headers['x-forwarded-proto'] || req.protocol}://${req.get('host')}${req.originalUrl}`;
     if (signature) {
-        const valid = twilio.validateRequest(AUTH_TOKEN, signature, url, req.body);
+        const valid = twilio.validateRequest(AUTH_TOKEN, signature, webhookUrl, req.body);
         if (!valid) {
-            console.log('[WhatsApp] Invalid Twilio signature — rejecting');
+            console.log(`[WhatsApp] Invalid Twilio signature — rejecting (url used: ${webhookUrl})`);
             return;
         }
     }
     const from = req.body.From || '';
     const body = req.body.Body || '';
     console.log(`[WhatsApp] Message from ${from}: "${body}"`);
-    // 2. Merchant number check — before anything reaches the LLM
+    // 2. Merchant number check — audit row written even for rejected senders
     if (from !== MERCHANT_NUMBER) {
         console.log(`[WhatsApp] Sender ${from} is not the registered merchant (${MERCHANT_NUMBER}) — ignoring`);
+        writeAuditRow({
+            merchantId: MERCHANT_ID, from, message: body,
+            parsedJson: null, decision: 'sender_rejected',
+            field: null, before: null, after: null, reply: null,
+        });
         return;
     }
     // 3. LLM parsing: free text → structured change
@@ -52,7 +63,12 @@ router.post('/webhooks/whatsapp', async (req, res) => {
             `• "Set discount ceiling to 20%"`,
             `• "Approve prop_abc123"`,
         ].join('\n');
-        await sendWhatsAppReply(from, helpText).catch(err => console.error('[WhatsApp] Reply failed:', err.message));
+        writeAuditRow({
+            merchantId: MERCHANT_ID, from, message: body,
+            parsedJson: null, decision: 'parse_failed',
+            field: null, before: null, after: null, reply: helpText,
+        });
+        await sendWhatsAppMessage(from, helpText).catch(err => console.error('[WhatsApp] Reply failed:', err.message));
         return;
     }
     // 4. Deterministic bounds-check — the LLM NEVER decides this
@@ -62,12 +78,12 @@ router.post('/webhooks/whatsapp', async (req, res) => {
     // 5. Act on the decision
     if (evalResult.decision === 'auto_apply') {
         if (parseResult.type === 'policy_field_change') {
-            const { before, after, policyKey } = applyPolicyFieldChange(parseResult, (await import('../db/client.js')).default, MERCHANT_ID);
+            const { before, after, policyKey } = applyPolicyFieldChange(parseResult, db, MERCHANT_ID);
             const unit = policyKey.includes('pct') ? '%' : '₹';
             const beforeDisplay = policyKey.includes('pct') ? before : before / 100;
             const afterDisplay = policyKey.includes('pct') ? after : after / 100;
             const confirmMsg = [
-                `✅ Policy updated via WhatsApp`,
+                `Policy updated via WhatsApp`,
                 ``,
                 `Field: ${parseResult.field}`,
                 `Before: ${unit}${beforeDisplay}`,
@@ -75,29 +91,41 @@ router.post('/webhooks/whatsapp', async (req, res) => {
                 ``,
                 `This change is live now. All future proposals will use the new value.`,
             ].join('\n');
-            await sendWhatsAppReply(from, confirmMsg).catch(err => console.error('[WhatsApp] Reply failed:', err.message));
+            writeAuditRow({
+                merchantId: MERCHANT_ID, from, message: body,
+                parsedJson: JSON.stringify(parseResult),
+                decision: 'auto_applied',
+                field: parseResult.field,
+                before: String(beforeDisplay),
+                after: String(afterDisplay),
+                reply: confirmMsg,
+            });
+            await sendWhatsAppMessage(from, confirmMsg).catch(err => console.error('[WhatsApp] Reply failed:', err.message));
         }
         else if (parseResult.type === 'single_use_override') {
-            // Single-use overrides are handled in Step 5 — for now, acknowledge
-            const overrideMsg = [
-                `✅ Single-use override noted for proposal ${parseResult.proposal_id}.`,
-                ``,
-                `This override applies to this one proposal only — your policy caps are unchanged.`,
-            ].join('\n');
-            await sendWhatsAppReply(from, overrideMsg).catch(err => console.error('[WhatsApp] Reply failed:', err.message));
+            // Execute the override — audit logging happens inside executeOverride
+            const overrideResult = await executeOverride(parseResult.proposal_id, MERCHANT_ID, from, body);
+            await sendWhatsAppMessage(from, overrideResult.reply).catch(err => console.error('[WhatsApp] Reply failed:', err.message));
         }
     }
     else {
         // defer_to_dashboard
         const deferMsg = [
-            `⚠️ This change needs dashboard confirmation`,
+            `This change needs dashboard confirmation`,
             ``,
             evalResult.reason,
             ``,
             `Open your Vyapar dashboard to make this change.`,
         ].join('\n');
-        await sendWhatsAppReply(from, deferMsg).catch(err => console.error('[WhatsApp] Reply failed:', err.message));
+        writeAuditRow({
+            merchantId: MERCHANT_ID, from, message: body,
+            parsedJson: JSON.stringify(parseResult),
+            decision: 'deferred',
+            field: parseResult.type === 'policy_field_change' ? parseResult.field : 'single_use_override',
+            before: null, after: null,
+            reply: deferMsg,
+        });
+        await sendWhatsAppMessage(from, deferMsg).catch(err => console.error('[WhatsApp] Reply failed:', err.message));
     }
 });
-export { sendWhatsAppReply };
 export default router;

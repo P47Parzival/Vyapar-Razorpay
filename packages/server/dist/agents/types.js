@@ -16,7 +16,7 @@ export const ProposalSchema = z.object({
     discount_pct: z.number().min(0).max(100).optional(),
     original_order_id: z.string().optional(),
     item_ids: z.array(z.string()).optional(),
-    triggered_by: z.enum(['simulated_button', 'webhook', 'mcp_external', 'internal']).optional(),
+    triggered_by: z.enum(['simulated_button', 'webhook', 'mcp_external', 'internal', 'whatsapp_override']).optional(),
     related_order_id: z.string().optional(),
 });
 // --- PolicyCheckResult: outcome of a single policy check ---

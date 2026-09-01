@@ -10,11 +10,12 @@ import MandatePanel from './components/MandatePanel';
 import MerchantOnboarding from './components/MerchantOnboarding';
 import CatalogAudit from './components/CatalogAudit';
 import ProductsCatalog from './components/ProductsCatalog';
+import WhatsAppLogs from './components/WhatsAppLogs';
 import { MerchantProvider, useMerchant } from './MerchantContext';
 import vyaparLogo from '../assets/vyapar_logo.png';
 import './dashboard.css';
 
-type Tab = 'dashboard' | 'connect' | 'products' | 'catalog-confidence';
+type Tab = 'dashboard' | 'connect' | 'products' | 'catalog-confidence' | 'whatsapp-logs';
 
 function DashboardInner() {
   const navigate = useNavigate();
@@ -26,6 +27,7 @@ function DashboardInner() {
     { key: 'connect', label: 'Connect' },
     { key: 'products', label: 'Products' },
     { key: 'catalog-confidence', label: 'Catalog Confidence' },
+    { key: 'whatsapp-logs', label: 'WhatsApp Logs' },
   ];
 
   return (
@@ -127,6 +129,10 @@ function DashboardInner() {
 
         {activeTab === 'catalog-confidence' && (
           <CatalogAudit />
+        )}
+
+        {activeTab === 'whatsapp-logs' && (
+          <WhatsAppLogs />
         )}
       </main>
     </div>

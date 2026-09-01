@@ -65,6 +65,7 @@ export default function LedgerFeed() {
         case 'webhook': return `${agent} · webhook`;
         case 'mcp_external': return `${agent} · via MCP`;
         case 'internal': return `${agent} · internal`;
+        case 'whatsapp_override': return `${agent} · WhatsApp override`;
         default: return `${agent} · simulated`;
       }
     } catch {

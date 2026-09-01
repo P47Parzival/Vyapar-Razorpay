@@ -107,6 +107,34 @@ CREATE TABLE IF NOT EXISTS merchants (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+CREATE TABLE IF NOT EXISTS whatsapp_audit_log (
+  id TEXT PRIMARY KEY,
+  merchant_id TEXT NOT NULL DEFAULT 'default',
+  from_number TEXT NOT NULL,
+  message_text TEXT NOT NULL,
+  parsed_change_json TEXT DEFAULT NULL,
+  decision TEXT NOT NULL, -- 'auto_applied' | 'deferred' | 'parse_failed' | 'sender_rejected'
+  field_changed TEXT DEFAULT NULL,
+  value_before TEXT DEFAULT NULL,
+  value_after TEXT DEFAULT NULL,
+  reply_sent TEXT DEFAULT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS single_use_overrides (
+  id TEXT PRIMARY KEY,
+  proposal_id TEXT NOT NULL,
+  merchant_id TEXT NOT NULL DEFAULT 'default',
+  approved_via TEXT NOT NULL DEFAULT 'whatsapp',
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  used INTEGER NOT NULL DEFAULT 0,
+  used_at TEXT DEFAULT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_overrides_proposal ON single_use_overrides(proposal_id);
+CREATE INDEX IF NOT EXISTS idx_whatsapp_audit_merchant ON whatsapp_audit_log(merchant_id);
+CREATE INDEX IF NOT EXISTS idx_whatsapp_audit_created ON whatsapp_audit_log(created_at DESC);
+
 CREATE INDEX IF NOT EXISTS idx_catalog_trials_batch ON catalog_trials(run_batch_id);
 CREATE INDEX IF NOT EXISTS idx_catalog_trials_goal ON catalog_trials(goal_id);
 

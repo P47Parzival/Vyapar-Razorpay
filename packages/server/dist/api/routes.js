@@ -393,4 +393,11 @@ router.get('/catalog-audit/batches', (_req, res) => {
      FROM catalog_trials GROUP BY run_batch_id ORDER BY started_at DESC`).all();
     res.json({ batches: rows });
 });
+// --- WhatsApp Audit Log endpoints ---
+router.get('/whatsapp-logs', (req, res) => {
+    const merchantId = getMerchantId(req);
+    const limit = parseInt(req.query.limit) || 50;
+    const rows = db.prepare('SELECT * FROM whatsapp_audit_log WHERE merchant_id = ? ORDER BY created_at DESC LIMIT ?').all(merchantId, limit);
+    res.json({ logs: rows, count: rows.length });
+});
 export default router;
