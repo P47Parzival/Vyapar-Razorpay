@@ -10,42 +10,13 @@ import {
 
 let _client: BedrockRuntimeClient | null = null;
 
-function parseBedrockApiKey(raw: string): { accessKeyId: string; secretAccessKey: string } {
-  if (raw.startsWith('ABSK')) {
-    const decoded = Buffer.from(raw.slice(4), 'base64').toString('utf-8');
-    const colonIdx = decoded.indexOf(':');
-    if (colonIdx > 0) {
-      return {
-        accessKeyId: decoded.slice(0, colonIdx),
-        secretAccessKey: decoded.slice(colonIdx + 1),
-      };
-    }
-  }
-  return { accessKeyId: raw, secretAccessKey: raw };
-}
-
 function getClient(): BedrockRuntimeClient {
   if (!_client) {
-    const rawKey = process.env.BEDROCK_API_KEY || '';
-    console.log(`[Bedrock] Raw key length: ${rawKey.length}, starts with ABSK: ${rawKey.startsWith('ABSK')}`);
-    const creds = parseBedrockApiKey(rawKey);
-    console.log(`[Bedrock] Parsed accessKeyId: ${creds.accessKeyId}, secretKey length: ${creds.secretAccessKey.length}`);
     const region = process.env.AWS_REGION || 'ap-south-1';
-    console.log(`[Bedrock] Region: ${region}, Model: ${getModelId()}`);
-    // Check for interfering AWS env vars
-    const awsEnvVars = ['AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY', 'AWS_SESSION_TOKEN', 'AWS_PROFILE']
-      .filter(k => !!process.env[k]);
-    if (awsEnvVars.length > 0) {
-      console.log(`[Bedrock] WARNING: Found AWS env vars that may interfere: ${awsEnvVars.join(', ')}`);
-    }
-    // Use a provider function to completely bypass the default credential chain
-    const credentialProvider = async () => ({
-      accessKeyId: creds.accessKeyId,
-      secretAccessKey: creds.secretAccessKey,
-    });
+    const rawToken = process.env.BEDROCK_API_KEY || '';
     _client = new BedrockRuntimeClient({
       region,
-      credentials: credentialProvider,
+      token: { token: rawToken },
     });
   }
   return _client;

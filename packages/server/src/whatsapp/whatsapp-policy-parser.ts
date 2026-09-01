@@ -106,8 +106,6 @@ export async function parseWhatsAppPolicyMessage(messageText: string): Promise<P
     };
   } catch (err: any) {
     console.error('[WhatsApp Parser] LLM call failed:', err.message);
-    console.error('[WhatsApp Parser] Error name:', err.name, '| Code:', err.$metadata?.httpStatusCode, '| RequestId:', err.$metadata?.requestId);
-    console.error('[WhatsApp Parser] Full error:', JSON.stringify({ name: err.name, message: err.message, code: err.Code, metadata: err.$metadata }));
     return {
       type: 'parse_failure',
       reason: `LLM parsing error: ${err.message}`,
