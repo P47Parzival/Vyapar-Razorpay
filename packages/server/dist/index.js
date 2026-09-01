@@ -5,6 +5,7 @@ import { seedDatabase } from './db/seed.js';
 import catalogRouter from './catalog/catalog-api.js';
 import apiRouter from './api/routes.js';
 import webhookRouter from './webhooks/razorpay-webhook.js';
+import whatsappRouter from './webhooks/whatsapp-webhook.js';
 import { handleMcpPost, handleMcpGet, handleMcpDelete } from './mcp-server/vyapar-mcp-server.js';
 import { startAutoSync } from './shopify/connector.js';
 seedDatabase();
@@ -23,6 +24,8 @@ app.use('/api', catalogRouter);
 app.use('/api', apiRouter);
 // Razorpay webhook — signature-verified, triggers Growth Agent on payment events
 app.use('/api', webhookRouter);
+// WhatsApp webhook — Twilio sends form-encoded POST, needs urlencoded parser
+app.use('/api', express.urlencoded({ extended: false }), whatsappRouter);
 // MCP Server — exposes Vyapar as a tool provider for external AI agents
 // Bearer token auth (demo-grade; a real Connectors Directory listing would require full OAuth)
 const MCP_TOKEN = process.env.MCP_BEARER_TOKEN;
