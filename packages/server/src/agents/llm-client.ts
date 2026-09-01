@@ -32,9 +32,18 @@ function getClient(): BedrockRuntimeClient {
     console.log(`[Bedrock] Parsed accessKeyId: ${creds.accessKeyId}, secretKey length: ${creds.secretAccessKey.length}`);
     const region = process.env.AWS_REGION || 'ap-south-1';
     console.log(`[Bedrock] Region: ${region}, Model: ${getModelId()}`);
+    // Check for interfering AWS env vars
+    const awsEnvVars = ['AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY', 'AWS_SESSION_TOKEN', 'AWS_PROFILE']
+      .filter(k => !!process.env[k]);
+    if (awsEnvVars.length > 0) {
+      console.log(`[Bedrock] WARNING: Found AWS env vars that may interfere: ${awsEnvVars.join(', ')}`);
+    }
     _client = new BedrockRuntimeClient({
       region,
-      credentials: creds,
+      credentials: {
+        accessKeyId: creds.accessKeyId,
+        secretAccessKey: creds.secretAccessKey,
+      },
     });
   }
   return _client;
