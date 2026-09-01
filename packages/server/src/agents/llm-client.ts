@@ -16,7 +16,7 @@ function getClient(): BedrockRuntimeClient {
     const rawToken = process.env.BEDROCK_API_KEY || '';
     _client = new BedrockRuntimeClient({
       region,
-      token: { token: rawToken },
+      tokenProvider: async () => ({ token: rawToken }),
     });
   }
   return _client;
