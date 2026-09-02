@@ -28,8 +28,9 @@ Live website: [Click Here!](https://vyaparxrazorpay.vercel.app)
 14. [The Dashboard](#14-the-dashboard)
 15. [Real-World Evidence and Rollout Path](#15-real-world-evidence-and-rollout-path)
 16. [Multi-Merchant Discovery and Distribution](#16-multi-merchant-discovery-and-distribution)
-17. [Tech Stack](#17-tech-stack)
-18. [Quick Setup](#18-quick-setup)
+17. [WhatsApp Merchant Control Channel](#17-whatsapp-merchant-control-channel)
+18. [Tech Stack](#18-tech-stack)
+19. [Quick Setup](#19-quick-setup)
 
 ## 1. What Vyapar Is (GoKwik Insipred, )
 
@@ -448,7 +449,7 @@ platform avoid introducing hidden bias into that choice?
 
 ### How MCP tool discovery actually works today
 
-A common misconception — and one this project does not pretend otherwise about — is that
+A common misconception  and one this project does not pretend otherwise about  is that
 an AI agent can spontaneously discover and invoke an MCP server it has never been
 connected to, the way a human might stumble onto a website through a search engine.
 **That is not how MCP works today.** Connection is a one-time, explicit user action:
@@ -456,11 +457,11 @@ either a local stdio config entry (the Claude Desktop setup from Section 11), or
 connector added through Anthropic's Connectors Directory at `claude.ai/settings/connectors`,
 which currently lists 400+ third-party and first-party integrations.
 
-Once connected — and only once connected — Claude automatically *invokes* the right
+Once connected  and only once connected  Claude automatically *invokes* the right
 tool on future relevant prompts, based on how well the tool's description matches the
 user's intent, without the user needing to name it explicitly. The quality of those
 descriptions (rewritten in this build to be trigger conditions, not just functional
-summaries — "use this whenever the user expresses intent to buy" rather than "browse
+summaries  "use this whenever the user expresses intent to buy" rather than "browse
 the catalog") directly affects how reliably this automatic selection fires.
 
 Anthropic's Connectors Directory is the real, production distribution path for MCP
@@ -472,64 +473,34 @@ server itself.
 
 **Built:** A working remote MCP server at a public HTTPS URL
 (`https://vyapar-server1.onrender.com/mcp`), speaking Streamable HTTP, serving the
-exact same tool implementations as the local stdio connection — `browse_catalog`,
+exact same tool implementations as the local stdio connection  `browse_catalog`,
 `get_product`, `submit_purchase_proposal`, `submit_addon_proposal`,
-`get_active_mandate`, `check_proposal_status` — with no forked or divergent logic
+`get_active_mandate`, `check_proposal_status`  with no forked or divergent logic
 between the two paths. A static bearer token protects the endpoint (documented honestly
 as demo-grade).
-
-**Not built, and explicitly out of scope for this plan:**
-
-- **Full OAuth authentication** — Anthropic's Connectors Directory requires OAuth, not
-  static bearer tokens. Implementing a proper OAuth flow (authorization server, token
-  refresh, scoped grants) is a real engineering task separate from proving the MCP
-  mechanism works.
-- **Formal directory submission and review** — a real external process with sustained
-  uptime commitments, compliance checks, and Anthropic's own evaluation criteria, on
-  their timeline, not something to rush or fake.
-- **Guaranteed automatic invocation** — even officially partnered connectors (Zomato,
-  Swiggy, etc.) do not always trigger automatically on natural-language intent; Claude's
-  tool selection is probabilistic, not deterministic, and improving it is an ongoing
-  effort across the MCP ecosystem, not a per-server configuration this project can
-  control unilaterally.
 
 The remote server proves the underlying mechanism is real and correct. Submission itself
 is future work, stated as such.
 
 ### Multi-merchant ranking: transparent, not opaque
 
+![MultiMerchant](assets/Vyapar_multi.png)
+
 When `browse_catalog` is called without a specific `merchant_id`, it returns products
 from **every merchant that has opted in** (the AI Agent Transactability toggle from
 Section 13), not just the first one seeded. Each item in the response carries its
-`merchant_id` and `merchant_name` — visible to the calling agent and, through it, to the
-user — so the attribution is never flattened away.
+`merchant_id` and `merchant_name`  visible to the calling agent and, through it, to the
+user  so the attribution is never flattened away.
 
 The sort rule applied to these cross-merchant results is:
-**price ascending within category** — stated in a `sort` metadata field on every
+**price ascending within category**  stated in a `sort` metadata field on every
 response, alongside a `sort_note` confirming no hidden merchant weighting. Every
 opted-in merchant's items are ranked by the same visible rule, full stop.
 
-**What was deliberately not built:**
-
-- No per-merchant "featured placement" or paid ranking boost — every merchant's items
-  compete on the same visible criteria, regardless of when they onboarded or what
-  arrangement they might have with the platform.
-- No hidden weighting, recommendation model, or opaque scoring — the sort rule is stated
-  on the response itself, not inferred by the caller.
-- No silent auto-selection — the tool's description explicitly instructs: *"Results may
-  span multiple merchants. Present the options and their merchant to the user rather
-  than silently picking one."* This keeps multi-merchant behavior from collapsing back
-  into "just pick the cheapest" without the user seeing alternatives.
-
-This restraint is deliberate, and it extends the same principle the Policy Gateway has
-followed since Section 3: money-adjacent decisions are explainable and bounded, and
-product-selection decisions — which directly influence which merchant gets the sale — are
-held to the same standard, not exempted from it.
-
 ### End-to-end proof
 
-With two merchants seeded (Vyapar Wellness — skincare, wellness, accessories; UrbanGear
-Co. — apparel, electronics), each with independent policy caps, independent mandates,
+With two merchants seeded (Vyapar Wellness  skincare, wellness, accessories; UrbanGear
+Co.  apparel, electronics), each with independent policy caps, independent mandates,
 and independent catalog items, a programmatic end-to-end test confirmed:
 
 - Cross-merchant `browse_catalog` returns items from **both** merchants, correctly
@@ -538,13 +509,91 @@ and independent catalog items, a programmatic end-to-end test confirmed:
   UrbanGear's own policy config, creates a Razorpay test-mode order, and writes a
   ledger row and order row both correctly attributed to `merchant_2`.
 - A mandate issued for Vyapar Wellness **cannot** authorize a purchase against
-  UrbanGear Co.'s catalog — the proposal is denied with `MANDATE_SCOPE_EXCEEDED`,
+  UrbanGear Co.'s catalog  the proposal is denied with `MANDATE_SCOPE_EXCEEDED`,
   proving merchant-scoped mandate isolation.
-- Each merchant's ledger view contains only its own entries — no cross-contamination.
+- Each merchant's ledger view contains only its own entries  no cross-contamination.
 
 ---
 
-## 17. Tech Stack
+## 17. WhatsApp Merchant Control Channel (Meet customer where they are)
+
+![Whatsapp](assets/Vyapar_whatsapp.png)
+
+Everything described in Sections 3–5 governs what happens when an AI agent proposes
+spending money. This section describes a parallel channel  WhatsApp, via Twilio  that
+lets the merchant govern the *policy itself* from their phone, subject to the exact same
+architectural discipline: an LLM may parse, but only deterministic, inspectable code
+decides whether a change is applied.
+
+### The flow
+
+1. The merchant sends a free-text WhatsApp message to the Twilio sandbox number  e.g.
+   *"change the per-transaction cap to 4500"* or *"approve prop_abc123."*
+2. **Twilio signature validation** confirms the webhook genuinely came from Twilio, and a
+   **hardcoded merchant-number check** confirms the sender is the registered merchant 
+   both checks run before any message reaches the LLM.
+3. An LLM parses the free text into a structured, typed object 
+   `{ type: "policy_field_change", field: "per_transaction_cap", to: 4500 }` or
+   `{ type: "single_use_override", proposal_id: "prop_abc123", action: "approve" }`. The
+   LLM's system prompt explicitly states it never decides whether a change should be
+   applied  it only extracts what was requested.
+4. That structured object is handed to `evaluatePolicyChangeRequest()`  a **pure,
+   deterministic, unit-tested function** with no I/O and no LLM call inside it  which
+   decides, based on a fixed rule set, whether this specific change is small enough to
+   auto-apply or must be deferred to the dashboard.
+5. If auto-appliable: the change is written to `policy_config`, and WhatsApp replies with
+   the exact field, before value, and after value  never a generic "done."
+6. If deferred: WhatsApp replies telling the merchant to confirm on the dashboard, stating
+   *why* in plain language (e.g. "that's more than 2x your current cap").
+7. If the message couldn't be parsed: a help-text reply with example commands.
+
+**Every outcome  applied, deferred, parse-failed, or sender-rejected  writes exactly
+one row to `whatsapp_audit_log`**, visible in the dashboard's "WhatsApp Logs" tab,
+following the same append-only, one-row-per-action discipline as the purchase ledger.
+
+### The field whitelist and why it's small
+
+Only three policy fields are editable via WhatsApp: `per_transaction_cap`,
+`daily_velocity_cap`, and `discount_ceiling`. Category allowlists, mandate parameters,
+and everything else require the dashboard. This is deliberate  a small, named,
+hardcoded whitelist is the safety property this channel relies on. Expanding it is future
+work that belongs behind real merchant authentication, not a casual addition.
+
+### The bounds-check rules
+
+For each whitelisted field, a fixed multiplier determines the auto-apply boundary:
+
+- **Increases**: up to 2x the current value auto-applies; beyond that, deferred.
+- **Decreases**: up to 50% reduction auto-applies; beyond that, deferred.
+- **Discount ceiling** specifically: changes above 50% absolute are always deferred.
+
+These constants are named (`MAX_AUTO_CAP_MULTIPLIER`, `MAX_AUTO_DECREASE_FACTOR`,
+`MAX_AUTO_DISCOUNT_CEILING_PCT`) and live in a single file
+(`policy-change-evaluator.ts`), not scattered across the codebase.
+
+### Single-use override: rescuing one denied sale
+
+When the Policy Gateway denies a purchase that exceeds the cap by a notable margin
+(amount > 2x the current cap), an **outbound** WhatsApp message is sent to the merchant
+automatically: *"A ₹4,500 order was just denied  your cap is ₹1,000. Reply 'approve
+prop_abc123' to let this one order through."*
+
+If the merchant replies with that approval:
+
+- The original denied proposal is **re-run through `processProposal()`** with a
+  single-use exception flag scoped to that exact `proposal_id` only.
+- The cap in `policy_config` is **completely unchanged**  only this one specific,
+  already-denied proposal gets a second chance.
+- The override is recorded in a `single_use_overrides` table and cannot be used twice.
+- The resulting order (if created) is tagged with source `whatsapp_merchant_override` in
+  both the ledger and orders view.
+
+This is not a temporary cap raise  it's a scoped, auditable, non-reusable exception
+that leaves global policy untouched for every other proposal.
+
+---
+
+## 18. Tech Stack
  
 | Category | Technologies Used |
 | :--- | :--- |
@@ -554,6 +603,7 @@ and independent catalog items, a programmatic end-to-end test confirmed:
 | **Payments** | Razorpay Node.js SDK |
 | **AI / LLM** | AWS Bedrock SDK, Model Context Protocol (MCP) |
 | **Frontend Dashboard** | React, Vite, TailwindCSS, Framer Motion |
+| **WhatsApp Channel** | Twilio SDK (WhatsApp Sandbox) |
 | **Tooling** | esbuild, Vite, tsc, concurrently |
 | **Pilot** | Shopify |
 
@@ -561,7 +611,7 @@ and independent catalog items, a programmatic end-to-end test confirmed:
 
 ---
 
-## 18. Quick Setup
+## 19. Quick Setup
 
 **Prerequisites:** Node.js v18+ and npm.
 
@@ -583,8 +633,12 @@ cp .env.example .env
 | `RAZORPAY_KEY_SECRET` | Payments (test mode) | Same as above |
 | `BEDROCK_API_KEY` | AI agents (Growth, Buyer) | AWS Bedrock console |
 | `AWS_REGION` | AI agents | Default: `ap-south-1` |
+| `TWILIO_ACCOUNT_SID` | WhatsApp channel | [Twilio Console](https://console.twilio.com) |
+| `TWILIO_AUTH_TOKEN` | WhatsApp channel | Same as above |
+| `TWILIO_WHATSAPP_FROM` | WhatsApp channel | Twilio Sandbox number (e.g. `whatsapp:+14155238886`) |
+| `MERCHANT_WHATSAPP_NUMBER` | WhatsApp channel | Your personal number (e.g. `whatsapp:+91XXXXXXXXXX`) |
 
-> The dashboard UI works fully without these — you can explore the interface, view the ledger, manage policies and mandates. AI agent triggers and payment features require valid credentials.
+> The dashboard UI works fully without these  you can explore the interface, view the ledger, manage policies and mandates. AI agent triggers and payment features require valid credentials.
 
 ### Claude Desktop MCP Setup (Optional)
 
@@ -607,7 +661,7 @@ To use Vyapar as an MCP server inside Claude Desktop (for in-app checkout):
 
 3. Restart Claude Desktop. Vyapar tools (`browse_catalog`, `submit_purchase_proposal`, etc.) will appear automatically.
 
-Alternatively, on **Windows** run `setup.bat` or on **Mac/Linux** run `bash setup.sh` — these scripts handle install, environment setup, and print MCP config instructions.
+Alternatively, on **Windows** run `setup.bat` or on **Mac/Linux** run `bash setup.sh`  these scripts handle install, environment setup, and print MCP config instructions.
 
 
 
