@@ -43,11 +43,11 @@ const MCP_TOKEN = process.env.MCP_BEARER_TOKEN;
 function mcpAuth(req: express.Request, res: express.Response, next: express.NextFunction) {
   if (!MCP_TOKEN) return next();
   const auth = req.headers.authorization;
-  if (!auth || auth !== `Bearer ${MCP_TOKEN}`) {
-    res.status(401).json({ error: 'Unauthorized — provide a valid Bearer token in the Authorization header' });
-    return;
+  const queryToken = req.query.token as string | undefined;
+  if (auth === `Bearer ${MCP_TOKEN}` || queryToken === MCP_TOKEN) {
+    return next();
   }
-  next();
+  res.status(401).json({ error: 'Unauthorized — provide a valid Bearer token in the Authorization header or ?token= query param' });
 }
 
 app.post('/mcp', mcpAuth, handleMcpPost);
