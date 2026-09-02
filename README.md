@@ -1,8 +1,8 @@
-# Vyapar: Bounded Agentic Commerce on Razorpay (Track 1)
+# Vyapar: Agentic Commerce on Razorpay (Track 1)
 
 
 Whole ideation behing the product 0->1: [Read Here!](https://medium.com/@dhruvmali999/building-vyapar-a-week-inside-the-agentic-commerce-rabbit-hole-471f87c0c855) <br>
-Demo Video Link: <br>
+Demo Video Link: [Video!](https://drive.google.com/file/d/1k1tIk4KdWIrE2-o91w27hEBLiKEC2f9X/view?usp=sharing)<br>
 Live website: [Click Here!](https://vyaparxrazorpay.vercel.app)
  
 ---
